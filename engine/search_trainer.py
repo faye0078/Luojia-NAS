@@ -5,14 +5,14 @@ import luojianet_ms.nn as nn
 from tqdm import tqdm
 from collections import OrderedDict
 
-from utils.dataloaders import make_data_loader
+from dataloaders import make_data_loader
 from utils.lr_scheduler import LR_Scheduler
 from utils.saver import Saver
 from utils.evaluator import Evaluator
 
 from model.StageNet1 import SearchNet1
-from model.StageNet2 import SearchNet2
-from model.StageNet3 import SearchNet3
+# from model.StageNet2 import SearchNet2
+# from model.StageNet3 import SearchNet3
 
 from utils.copy_state_dict import copy_state_dict
 from model.cell import ReLUConvBN, MixedCell
@@ -25,59 +25,41 @@ class Trainer(object):
         # 定义保存
         self.saver = Saver(args)
         self.saver.save_experiment_config()
-        # 可视化
-        # self.summary = TensorboardSummary(self.saver.experiment_dir)
-        # self.writer = self.summary.create_summary()
-        # 使用amp
-        self.use_amp = True if (APEX_AVAILABLE and args.use_amp) else False
+
         self.opt_level = args.opt_level
 
         # 定义dataloader
         kwargs = {'num_workers': args.workers, 'pin_memory': True, 'drop_last': True}
         self.train_loaderA, self.train_loaderB, self.val_loader, self.nclass = make_data_loader(args, **kwargs)
 
-        self.criterion = SegmentationLosses(weight=None, cuda=args.cuda).build_loss(mode=args.loss_type)
+        self.criterion = nn.SoftmaxCrossEntropyWithLogits(reduction='mean')
 
-        torch.cuda.empty_cache()
-        # 定义网络
-        if self.args.model_name == 'AutoDeeplab':
-            if self.args.forward:
-                model = AutoDeeplab_forward(self.nclass, 12, self.criterion, self.args.filter_multiplier,
-                                            self.args.block_multiplier, self.args.step, self.args.dataset)
-            else:
-                model = AutoDeeplab(self.nclass, 12, self.criterion, self.args.filter_multiplier,
-                                    self.args.block_multiplier, self.args.step, self.args.dataset)
-        if self.args.model_name == 'DCNAS':
-            layers = np.ones([12, 4])
+        if self.args.search_stage == "first":
+            layers = np.ones([14, 4])
             connections = np.load(self.args.model_encode_path)
-            model = DCNASNet(layers, 4, connections, DCNAS_cell, self.args.dataset, self.nclass)
-        elif self.args.model_name == 'FlexiNet':
-            if self.args.search_stage == "first":
-                layers = np.ones([14, 4])
-                connections = np.load(self.args.model_encode_path)
-                model = SearchNet1(layers, 4, connections, ReLUConvBN, self.args.dataset, self.nclass)
+            model = SearchNet1(layers, 4, connections, ReLUConvBN, self.args.dataset, self.nclass)
 
-            elif self.args.search_stage == "second":
-                layers = np.ones([14, 4])
-                connections = np.load(self.args.model_encode_path)
-                core_path = np.load('/media/dell/DATA/wy/Seg_NAS/model/model_encode/core_path.npy').tolist()
-                model = SearchNet2(layers, 4, connections, ReLUConvBN, self.args.dataset, self.nclass,
-                                   core_path=core_path)
+        elif self.args.search_stage == "second":
+            layers = np.ones([14, 4])
+            connections = np.load(self.args.model_encode_path)
+            core_path = np.load('/media/dell/DATA/wy/Seg_NAS/model/model_encode/core_path.npy').tolist()
+            model = SearchNet2(layers, 4, connections, ReLUConvBN, self.args.dataset, self.nclass,
+                               core_path=core_path)
 
-            elif self.args.search_stage == "third":
-                layers = np.ones([14, 4])
-                connections = np.load(self.args.model_encode_path)
-                # connections = 0
-                model = SearchNet3(layers, 4, connections, MixedCell, self.args.dataset, self.nclass)
+        elif self.args.search_stage == "third":
+            layers = np.ones([14, 4])
+            connections = np.load(self.args.model_encode_path)
+            # connections = 0
+            model = SearchNet3(layers, 4, connections, MixedCell, self.args.dataset, self.nclass)
 
-        optimizer = torch.optim.SGD(
+        optimizer = nn.SGD(
             model.weight_parameters(),
             args.lr,
             momentum=args.momentum,
             weight_decay=args.weight_decay
         )
         self.model, self.optimizer = model, optimizer
-        self.architect_optimizer = torch.optim.Adam(self.model.arch_parameters(),
+        self.architect_optimizer = nn.Adam(self.model.arch_parameters(),
                                                     lr=args.arch_lr, betas=(0.9, 0.999),
                                                     weight_decay=args.arch_weight_decay)
         # Define Evaluator
@@ -85,29 +67,15 @@ class Trainer(object):
         # Define lr scheduler
         self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr,
                                       args.epochs, 1000, min_lr=args.min_lr)
-
-        if args.cuda:
-            self.model = self.model.cuda()
-
-        # 使用apex支持混合精度分布式训练
-        if self.use_amp and args.cuda:
-            keep_batchnorm_fp32 = True if (self.opt_level == 'O2' or self.opt_level == 'O3') else None
-
-            self.model, [self.optimizer, self.architect_optimizer] = amp.initialize(
-                self.model, [self.optimizer, self.architect_optimizer], opt_level=self.opt_level,
-                keep_batchnorm_fp32=keep_batchnorm_fp32, loss_scale="dynamic")
-
-            print('cuda finished')
-
         # 加载模型
         self.best_pred = 0.0
         if args.resume is not None:
             if not os.path.isfile(args.resume):
                 raise RuntimeError("=> no checkpoint found at '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume)
+            checkpoint = luojia.load_checkpoint(args.resume)
             self.start_epoch = checkpoint['epoch']
-            self.model.load_state_dict(checkpoint['state_dict'])
-            copy_state_dict(self.optimizer.state_dict(), checkpoint['optimizer'])
+            self.model.load_param_into_net(checkpoint['state_dict'])
+            copy_state_dict(self.optimizer.state_dict(), checkpoint['optimizer']) # TODO: The details in loading optimizer
             self.best_pred = checkpoint['best_pred']
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
@@ -130,12 +98,9 @@ class Trainer(object):
             self.optimizer.zero_grad()
             output = self.model(image)
             loss = self.criterion(output, target)
-            if self.use_amp:
-                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-            self.optimizer.step()
+
+            loss.backward()
+            self.optimizer.TrainOneStepCell()
 
             if epoch >= self.args.alpha_epoch:
                 # if True:
