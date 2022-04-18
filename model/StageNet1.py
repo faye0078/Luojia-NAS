@@ -118,12 +118,14 @@ class SearchNet1(nn.Module):
                 for connection in self.connections:
                     if ([i, j] == connection[1]).all():
                         if connection[0][0] == -1:
-                            features[i][j] += normalized_betas[i][j][k] * self.cells[i][j][str(connection[0])](pre_feature)
+                            index = self.cells_index[i][j][str(connection[0])]
+                            features[i][j] += normalized_betas[i][j][k] * self.cells[i][j][index](pre_feature)
                         else:
-                            features[i][j] += normalized_betas[i][j][k] * self.cells[i][j][str(connection[0])](features[connection[0][0]][connection[0][1]])
+                            index = self.cells_index[i][j][str(connection[0])]
+                            features[i][j] += normalized_betas[i][j][k] * self.cells[i][j][index](features[connection[0][0]][connection[0][1]])
                         k += 1
 
-        last_features = [feature for feature in features[len(self.layers)-1] if torch.is_tensor(feature)] # TODO: how to replace?
+        last_features = [feature for feature in features[len(self.layers)-1] if feature != 0] # TODO: how to replace?
         last_features = [nn.ResizeBilinear()(feature, size=last_features[0].size()[2:], align_corners=True) for feature in last_features]
         result = ops.Concat(last_features, dim=1)
         result = self.last_conv(result)
@@ -131,7 +133,7 @@ class SearchNet1(nn.Module):
         return result
 
     def initialize_betas(self):
-        betas = (1e-3 * ops.StandardNormal(len(self.layers), self.depth, self.max_num_connect)).clone().detach().requires_grad_(True) # TODO: 含义是什么？
+        betas = (1e-3 * ops.StandardNormal()((len(self.layers), self.depth, self.max_num_connect)))# TODO: 含义是什么？
 
         self._arch_parameters = [
             betas,
