@@ -1,5 +1,5 @@
 import numpy as np
-import luojianet_ms
+import luojianet_ms as luojia
 from luojianet_ms import nn
 from luojianet_ms import ops
 import numpy
@@ -100,7 +100,7 @@ class SearchNet1(nn.Module):
         temp = self.stem1(temp)
         pre_feature = self.stem2(temp)
 
-        normalized_betas = ops.StandardNormal(len(self.layers), self.depth, self.max_num_connect).cuda()
+        normalized_betas = ops.StandardNormal(len(self.layers), self.depth, self.max_num_connect)
 
         for i in range(len(self.layers)):
             for j in range(self.depth):
@@ -142,14 +142,14 @@ class SearchNet1(nn.Module):
             'betas',
         ]
 
-        [self.register_parameter(name, luojianet_ms.Parameter(param)) for name, param in
-         zip(self._arch_param_names, self._arch_parameters)]
+        self._arch_parameters = [luojia.Parameter(name, param) for name, param in
+                                 zip(self._arch_param_names, self._arch_parameters)] # TODO: 是否需要多次声明 grad=True
 
     def arch_parameters(self):
-        return [param for name, param in self.named_parameters() if
+        return [param for name, param in self.parameters_and_names() if
                 name in self._arch_param_names]
 
     def weight_parameters(self):
-        return [param for name, param in self.named_parameters() if
+        return [param for name, param in self.parameters_and_names() if # TODO: debug the return type
                 name not in self._arch_param_names]
 
