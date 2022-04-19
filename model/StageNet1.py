@@ -93,7 +93,7 @@ class SearchNet1(nn.Module):
         self.initialize_betas()
 
 
-    def forward(self, x):
+    def call(self, x):
         features = []
 
         temp = self.stem0(x)

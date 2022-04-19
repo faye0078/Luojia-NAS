@@ -2,6 +2,7 @@ import luojianet_ms as luojia
 from luojianet_ms import nn
 import math
 import numpy
+import luojianet_ms.common.initializer as weight_init
 from collections import OrderedDict
 from model.ops import OPS, OPS_mini
 from model.ops import conv3x3
@@ -21,7 +22,7 @@ class ReLUConvBN(nn.Module):
         self.scale = C_in/C_out
         self._initialize_weights()
 
-    def forward(self, x):
+    def call(self, x):
         if self.scale != 0:
             feature_size_h = self.scale_dimension(x.shape[2], self.scale)
             feature_size_w = self.scale_dimension(x.shape[3], self.scale)
@@ -29,14 +30,16 @@ class ReLUConvBN(nn.Module):
         return self.op(x)
 
     def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                if m.weight is not None:
-                    m.weight.data.fill_(1)
-                    m.bias.data.zero_()
+        for _, cell in self.cells_and_names():
+            if isinstance(cell, nn.Conv2d):
+                weight_init.initializer(weight_init.XavierUniform(),
+                                        cell.weight.shape,
+                                        cell.weight.dtype)
+
+            elif isinstance(cell, nn.BatchNorm2d):
+                if cell.weight is not None:
+                    cell.weight.data.fill_(1)
+                    cell.bias.data.zero_()
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
@@ -57,9 +60,7 @@ class ConvBNReLU(nn.Module):
         self.scale = C_in/C_out
         self._initialize_weights()
 
-
-
-    def forward(self, x):
+    def call(self, x):
         if self.scale != 0:
             feature_size_h = self.scale_dimension(x.shape[2], self.scale)
             feature_size_w = self.scale_dimension(x.shape[3], self.scale)
@@ -67,14 +68,16 @@ class ConvBNReLU(nn.Module):
         return self.op(x)
 
     def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                if m.weight is not None:
-                    m.weight.data.fill_(1)
-                    m.bias.data.zero_()
+        for _, cell in self.cells_and_names():
+            if isinstance(cell, nn.Conv2d):
+                weight_init.initializer(weight_init.XavierUniform(),
+                                        cell.weight.shape,
+                                        cell.weight.dtype)
+
+            elif isinstance(cell, nn.BatchNorm2d):
+                if cell.weight is not None:
+                    cell.weight.data.fill_(1)
+                    cell.bias.data.zero_()
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
@@ -97,9 +100,7 @@ class MixedCell(nn.Module):
         self.scale = C_in/C_out
         self._initialize_weights()
 
-
-
-    def forward(self, x, cell_alphas):
+    def call(self, x, cell_alphas):
         if self.scale != 0:
             feature_size_h = self.scale_dimension(x.shape[2], self.scale)
             feature_size_w = self.scale_dimension(x.shape[3], self.scale)
@@ -107,14 +108,16 @@ class MixedCell(nn.Module):
         return sum(w * self._ops[op](x) for w, op in zip(cell_alphas, self._ops))
 
     def _initialize_weights(self):
-        for name, m in self.named_modules():
-            if isinstance(m, nn.Conv2d) and 'sobel_operator.filter' not in name:
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                if m.weight is not None:
-                    m.weight.data.fill_(1)
-                    m.bias.data.zero_()
+        for _, cell in self.cells_and_names():
+            if isinstance(cell, nn.Conv2d):
+                weight_init.initializer(weight_init.XavierUniform(),
+                                        cell.weight.shape,
+                                        cell.weight.dtype)
+
+            elif isinstance(cell, nn.BatchNorm2d):
+                if cell.weight is not None:
+                    cell.weight.data.fill_(1)
+                    cell.bias.data.zero_()
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
@@ -135,7 +138,7 @@ class MixedRetrainCell(nn.Module):
         self.scale = C_in/C_out
         self._initialize_weights()
 
-    def forward(self, x):
+    def call(self, x):
         if self.scale != 0:
             feature_size_h = self.scale_dimension(x.shape[2], self.scale)
             feature_size_w = self.scale_dimension(x.shape[3], self.scale)
@@ -143,14 +146,16 @@ class MixedRetrainCell(nn.Module):
         return sum(self._ops[op](x) for op in self._ops)
 
     def _initialize_weights(self):
-        for name, m in self.named_modules():
-            if isinstance(m, nn.Conv2d) and 'sobel_operator.filter' not in name:
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                if m.weight is not None:
-                    m.weight.data.fill_(1)
-                    m.bias.data.zero_()
+        for _, cell in self.cells_and_names():
+            if isinstance(cell, nn.Conv2d):
+                weight_init.initializer(weight_init.XavierUniform(),
+                                        cell.weight.shape,
+                                        cell.weight.dtype)
+
+            elif isinstance(cell, nn.BatchNorm2d):
+                if cell.weight is not None:
+                    cell.weight.data.fill_(1)
+                    cell.bias.data.zero_()
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
@@ -170,7 +175,7 @@ class Fusion(nn.Module):
         self.scale = C_in / C_out
         self._initialize_weights()
 
-    def forward(self, x):
+    def call(self, x):
         if self.scale != 0:
             feature_size_h = self.scale_dimension(x.shape[2], self.scale)
             feature_size_w = self.scale_dimension(x.shape[3], self.scale)
@@ -178,14 +183,16 @@ class Fusion(nn.Module):
         return self.conv(x)
 
     def _initialize_weights(self):
-        for name, m in self.named_modules():
-            if isinstance(m, nn.Conv2d) and 'sobel_operator.filter' not in name:
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                if m.weight is not None:
-                    m.weight.data.fill_(1)
-                    m.bias.data.zero_()
+        for _, cell in self.cells_and_names():
+            if isinstance(cell, nn.Conv2d):
+                weight_init.initializer(weight_init.XavierUniform(),
+                                        cell.weight.shape,
+                                        cell.weight.dtype)
+
+            elif isinstance(cell, nn.BatchNorm2d):
+                if cell.weight is not None:
+                    cell.weight.data.fill_(1)
+                    cell.bias.data.zero_()
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))

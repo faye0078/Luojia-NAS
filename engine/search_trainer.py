@@ -2,6 +2,8 @@ import os
 import numpy as np
 import luojianet_ms as luojia
 import luojianet_ms.nn as nn
+from luojianet_ms import Model
+from luojianet_ms.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor, TimeMonitor
 from tqdm import tqdm
 from collections import OrderedDict
 
@@ -32,6 +34,7 @@ class Trainer(object):
         kwargs = {'num_workers': args.workers, 'pin_memory': True, 'drop_last': True}
         self.train_loaderA, self.train_loaderB, self.val_loader, self.nclass = make_data_loader(args, **kwargs)
 
+        self.step_size = dataset.get_dataset_size()
         self.criterion = nn.SoftmaxCrossEntropyWithLogits(reduction='mean')
 
         if self.args.search_stage == "first":
@@ -50,23 +53,15 @@ class Trainer(object):
             layers = np.ones([14, 4])
             connections = np.load(self.args.model_encode_path)
             # connections = 0
-            model = SearchNet3(layers, 4, connections, MixedCell, self.args.dataset, self.nclass)
+            net = SearchNet3(layers, 4, connections, MixedCell, self.args.dataset, self.nclass)
 
-        optimizer = nn.SGD(
-            model.weight_parameters(),
-            args.lr,
-            momentum=args.momentum,
-            weight_decay=args.weight_decay
-        )
-        self.model, self.optimizer = model, optimizer
-        self.architect_optimizer = nn.Adam(self.model.arch_parameters(),
-                                                    lr=args.arch_lr, betas=(0.9, 0.999),
-                                                    weight_decay=args.arch_weight_decay)
+        lr = nn.dynamic_lr.cosine_decay_lr(args.min_lr, args.lr, args.epochs * step_size,
+                                           step_size, args.min_lr)
+        optimizer = nn.SGD(net.weight_parameters(), lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        self.net, self.optimizer = net, optimizer
+        self.architect_optimizer = nn.Adam(self.net.arch_parameters(), lr=args.arch_lr, weight_decay=args.arch_weight_decay)
         # Define Evaluator
         self.evaluator = Evaluator(self.nclass)
-        # Define lr scheduler
-        self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr,
-                                      args.epochs, 1000, min_lr=args.min_lr)
         # 加载模型
         self.best_pred = 0.0
         if args.resume is not None:
@@ -74,7 +69,7 @@ class Trainer(object):
                 raise RuntimeError("=> no checkpoint found at '{}'".format(args.resume))
             checkpoint = luojia.load_checkpoint(args.resume)
             self.start_epoch = checkpoint['epoch']
-            self.model.load_param_into_net(checkpoint['state_dict'])
+            self.net.load_param_into_net(checkpoint['state_dict'])
             copy_state_dict(self.optimizer.state_dict(), checkpoint['optimizer']) # TODO: The details in loading optimizer
             self.best_pred = checkpoint['best_pred']
             print("=> loaded checkpoint '{}' (epoch {})"
@@ -82,78 +77,20 @@ class Trainer(object):
         else:
             self.start_epoch = 0
 
+        self.model = Model(self.net, loss_fn=self.criterion, optimizer=self.optimizer, metrics={'acc'})
+
     def training(self, epoch):
-        train_loss = 0.0
 
-        self.model.train()
-        tbar = tqdm(self.train_loaderA, ncols=80)
+        time_cb = TimeMonitor(data_size=self.step_size)
+        loss_cb = LossMonitor()
+        config_ck = CheckpointConfig(save_checkpoint_steps=5,
+                                     keep_checkpoint_max=100)
+        ckpt_cb = ModelCheckpoint(prefix="resnet", directory=self.args.save_checkpoint_path, config=config_ck)
+        cb = [time_cb, loss_cb, ckpt_cb]
 
-        for i, sample in enumerate(tbar):
-            image = sample["image"]
-            target = sample["mask"]
-            # image, target = sample['image'], sample['label']
-            if self.args.cuda:
-                image, target = image.cuda(), target.cuda()
-            self.scheduler(self.optimizer, i, epoch, self.best_pred)
-            self.optimizer.zero_grad()
-            output = self.model(image)
-            loss = self.criterion(output, target)
 
-            loss.backward()
-            self.optimizer.TrainOneStepCell()
+        self.model.train(self.args.epochs, self.dataset, callbacks=cb, sink_size=self.step_size, dataset_sink_mode=False)
 
-            if epoch >= self.args.alpha_epoch:
-                # if True:
-                search = next(iter(self.train_loaderB))
-                image_search, target_search = search['image'], search['mask']
-                if self.args.cuda:
-                    image_search, target_search = image_search.cuda(), target_search.cuda()
-
-                self.architect_optimizer.zero_grad()
-                output_search = self.model(image_search)
-                arch_loss = self.criterion(output_search, target_search)
-                if self.use_amp:
-                    with amp.scale_loss(arch_loss, self.architect_optimizer) as arch_scaled_loss:
-                        arch_scaled_loss.backward()
-                else:
-                    arch_loss.backward()
-                self.architect_optimizer.step()
-
-            train_loss += loss.item()
-            # print(self.model.cells[0][0]['[-1  0]']._ops['sobel_operator'].filter.weight)
-            tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
-
-        if self.args.search_stage == "third":
-            alphas = self.model.alphas.cpu().detach().numpy()
-            alphas_dir = '/media/dell/DATA/wy/Seg_NAS/' + self.saver.experiment_dir + '/alphas'
-            if not os.path.exists(alphas_dir):
-                os.makedirs(alphas_dir)
-            alphas_path = alphas_dir + '/alphas_{}.npy'.format(epoch)
-            np.save(alphas_path, alphas, allow_pickle=True)
-        else:
-            betas = self.model.betas.cpu().detach().numpy()
-            betas_dir = '/media/dell/DATA/wy/Seg_NAS/' + self.saver.experiment_dir + '/betas'
-            if not os.path.exists(betas_dir):
-                os.makedirs(betas_dir)
-            betas_path = betas_dir + '/betas_{}.npy'.format(epoch)
-            np.save(betas_path, betas, allow_pickle=True)
-
-        print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.args.batch_size + image.data.shape[0]))
-        print('Loss: %.3f' % train_loss)
-
-        if not self.args.val:
-            # save checkpoint every epoch
-            is_best = False
-            if torch.cuda.device_count() > 1:
-                state_dict = self.model.module.state_dict()
-            else:
-                state_dict = self.model.state_dict()
-            self.saver.save_checkpoint({
-                'epoch': epoch + 1,
-                'state_dict': state_dict,
-                'optimizer': self.optimizer.state_dict(),
-                'best_pred': self.best_pred,
-            }, is_best, 'epoch{}_checkpoint.pth.tar'.format(str(epoch + 1)))
 
     def validation(self, epoch):
         self.model.eval()
