@@ -1,6 +1,44 @@
 import argparse
 import numpy as np
-
+from easydict import EasyDict as ed
+# Configuration for model definition
+hrnetw48_config = ed({
+    "extra": {
+        "FINAL_CONV_KERNEL": 1,
+        "STAGE1": {
+            "NUM_MODULES": 1,
+            "NUM_BRANCHES": 1,
+            "BLOCK": "BOTTLENECK",
+            "NUM_BLOCKS": [4],
+            "NUM_CHANNELS": [64],
+            "FUSE_METHOD": "SUM"
+        },
+        "STAGE2": {
+            "NUM_MODULES": 1,
+            "NUM_BRANCHES": 2,
+            "BLOCK": "BASIC",
+            "NUM_BLOCKS": [4, 4],
+            "NUM_CHANNELS": [48, 96],
+            "FUSE_METHOD": "SUM"
+        },
+        "STAGE3": {
+            "NUM_MODULES": 4,
+            "NUM_BRANCHES": 3,
+            "BLOCK": "BASIC",
+            "NUM_BLOCKS": [4, 4, 4],
+            "NUM_CHANNELS": [48, 96, 192],
+            "FUSE_METHOD": "SUM"
+        },
+        "STAGE4": {
+            "NUM_MODULES": 3,
+            "NUM_BRANCHES": 4,
+            "BLOCK": "BASIC",
+            "NUM_BLOCKS": [4, 4, 4, 4],
+            "NUM_CHANNELS": [48, 96, 192, 384],
+            "FUSE_METHOD": "SUM"
+        }
+    },
+})
 def obtain_search_args():
     parser = argparse.ArgumentParser(description="search args")
 
@@ -9,10 +47,11 @@ def obtain_search_args():
     parser.add_argument('--checkname', type=str, default='test', help='set the checkpoint name')
     parser.add_argument('--save_checkpoint_path', type=str, default='/media/dell/DATA/wy/luojis_NAS/saved_model', help='put the path to resuming file if needed')
     parser.add_argument('--model_encode_path', type=str, default='/media/dell/DATA/wy/Seg_NAS/model/model_encode/GID-5/14layers_mixedcell1_3operation/third_connect_4.npy')
-    parser.add_argument('--search_stage', type=str, default='third', choices=['first', 'second', 'third'], help='witch search stage')
+    parser.add_argument('--search_stage', type=str, default='hrnet', choices=['first', 'second', 'third', 'hrnet'], help='witch search stage')
 
     parser.add_argument('--batch-size', type=int, default=2, metavar='N', help='input batch size for training (default: auto)')
-    parser.add_argument('--dataset', type=str, default='GID', choices=['pascal', 'coco', 'cityscapes', 'kd', 'GID', 'hps-GID', 'GID-15'], help='dataset name (default: pascal)')
+    parser.add_argument('--dataset', type=str, default='uadataset', choices=['uadataset'], help='dataset name (default: pascal)')
+    parser.add_argument('--data_path', type=str, default='/media/dell/DATA/wy/data', help='dataset root path')
 
     parser.add_argument('--workers', type=int, default=0,metavar='N', help='dataloader threads')
     parser.add_argument('--crop_size', type=int, default=512, help='crop image size')
@@ -29,6 +68,7 @@ def obtain_search_args():
     # training hyper params
     parser.add_argument('--epochs', type=int, default=60, metavar='N', help='number of epochs to train (default: auto)')
     parser.add_argument('--start_epoch', type=int, default=0, metavar='N', help='start epochs (default:0)')
+    parser.add_argument('--eval_start', type=int, default=20, metavar='N', help='start eval epochs (default:0)')
     parser.add_argument('--filter_multiplier', type=int, default=8)
     parser.add_argument('--block_multiplier', type=int, default=5)
     parser.add_argument('--step', type=int, default=5)

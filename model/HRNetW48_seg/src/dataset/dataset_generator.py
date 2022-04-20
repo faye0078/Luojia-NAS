@@ -15,11 +15,13 @@
 """Dataset generators."""
 import os
 
-import luojianet_ms.dataset.engine as de
+import mindspore.dataset.engine as de
 
-from dataloaders.datasets.uadataset import Uadataset
+from src.dataset.cityscapes import Cityscapes
+from src.dataset.lip import LIP
 
-def make_data_loader(args, batch_size=4, run_distribute=False, is_train=True, raw=False):
+
+def create_seg_dataset(data_name, data_path=None, batchsize=4, run_distribute=False, is_train=True, raw=False):
     """
     Create dataset loader.
 
@@ -38,45 +40,71 @@ def make_data_loader(args, batch_size=4, run_distribute=False, is_train=True, ra
         num_classes: number of classes.
         class_weights: a list of weights for each class.
     """
-    if args.dataset == "uadataset":
-        num_classes = 12
+    if data_name == "cityscapes":
+        num_classes = 19
         if is_train:
             multi_scale = True
             flip = True
-            crop_size = (512, 512)
+            crop_size = (512, 1024)
         else:
             multi_scale = False
             flip = False
-            crop_size = (512, 512)
-        if args.data_path is None:
+            crop_size = (1024, 2048)
+        if data_path is None:
             return crop_size, num_classes
-        dataset = Uadataset(args.data_path,
+        dataset = Cityscapes(data_path,
                              num_samples=None,
-                             num_classes=12,
+                             num_classes=19,
                              multi_scale=multi_scale,
                              flip=flip,
                              ignore_label=255,
-                             base_size=512,
+                             base_size=2048,
                              crop_size=crop_size,
                              downsample_rate=1,
                              scale_factor=16,
-                             mean=[0.40781063, 0.44303973, 0.35496944],
-                             std=[0.3098623 , 0.2442191 , 0.22205387],
+                             mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225],
                              is_train=is_train)
+    elif data_name == "lip":
+        num_classes = 20
+        crop_size = (473, 473)
+        if is_train:
+            multi_scale = True
+            flip = True
+        else:
+            multi_scale = False
+            flip = False
+        if data_path is None:
+            return crop_size, num_classes
+        dataset = LIP(data_path,
+                      num_samples=None,
+                      num_classes=20,
+                      multi_scale=multi_scale,
+                      flip=flip,
+                      ignore_label=255,
+                      base_size=473,
+                      crop_size=crop_size,
+                      downsample_rate=1,
+                      scale_factor=11,
+                      mean=[0.485, 0.456, 0.406],
+                      std=[0.229, 0.224, 0.225],
+                      is_train=is_train)
     else:
         raise ValueError("Unsupported dataset.")
     class_weights = dataset.class_weights
     if raw:
-        return dataset, crop_size, num_classes
+        return dataset, crop_size, num_classes, class_weights
     if run_distribute:
+        device_id = int(os.getenv("DEVICE_ID"))
+        device_num = int(os.getenv("RANK_SIZE"))
         dataset = de.GeneratorDataset(dataset, column_names=["image", "label"],
                                       num_parallel_workers=8,
                                       shuffle=True,
-                                      num_shards=1, shard_id=int(args.gpu_id))
+                                      num_shards=device_num, shard_id=device_id)
     else:
         dataset = de.GeneratorDataset(dataset, column_names=["image", "label"],
                                       num_parallel_workers=8,
                                       shuffle=True)
-    dataset = dataset.batch(batch_size, drop_remainder=True)
+    dataset = dataset.batch(batchsize, drop_remainder=True)
 
-    return dataset, crop_size, num_classes
+    return dataset, crop_size, num_classes, class_weights

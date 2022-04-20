@@ -16,23 +16,23 @@
 import cv2
 import numpy as np
 
-import luojianet_ms.ops as P
-from luojianet_ms import Tensor
-from luojianet_ms.common import dtype
+import mindspore.ops as P
+from mindspore import Tensor
+from mindspore.common import dtype
 
-from dataloaders.datasets.basedataset import BaseDataset
+from src.dataset.basedataset import BaseDataset
 
 
-class Uadataset(BaseDataset):
+class Cityscapes(BaseDataset):
     """Dataset Cityscapes generator."""
     def __init__(self,
                  root,
                  num_samples=None,
-                 num_classes=12,
+                 num_classes=19,
                  multi_scale=False,
                  flip=False,
                  ignore_label=-1,
-                 base_size=512,
+                 base_size=2048,
                  crop_size=None,
                  downsample_rate=1,
                  scale_factor=16,
@@ -40,15 +40,15 @@ class Uadataset(BaseDataset):
                  std=None,
                  is_train=True):
 
-        super(Uadataset, self).__init__(ignore_label, num_classes, base_size,
+        super(Cityscapes, self).__init__(ignore_label, num_classes, base_size,
                                          crop_size, downsample_rate, scale_factor, mean, std)
 
         self._index = 0
         self.root = root
         if is_train:
-            self.list_path = root + "/uadataset/map_uad_512_train.lst"
+            self.list_path = root + "/train.lst"
         else:
-            self.list_path = root + "/uadataset/map_uad_512_val.lst"
+            self.list_path = root + "/val.lst"
         self.num_classes = num_classes
         self.multi_scale = multi_scale
         self.flip = flip
@@ -61,8 +61,23 @@ class Uadataset(BaseDataset):
         if num_samples:
             self.files = self.files[:num_samples]
 
-        self.label_mapping = None
-        self.class_weights = None
+        self.label_mapping = {-1: ignore_label, 0: ignore_label,
+                              1: ignore_label, 2: ignore_label,
+                              3: ignore_label, 4: ignore_label,
+                              5: ignore_label, 6: ignore_label,
+                              7: 0, 8: 1, 9: ignore_label,
+                              10: ignore_label, 11: 2, 12: 3,
+                              13: 4, 14: ignore_label, 15: ignore_label,
+                              16: ignore_label, 17: 5, 18: ignore_label,
+                              19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11,
+                              25: 12, 26: 13, 27: 14, 28: 15,
+                              29: ignore_label, 30: ignore_label,
+                              31: 16, 32: 17, 33: 18}
+        self.class_weights = [0.8373, 0.918, 0.866, 1.0345,
+                              1.0166, 0.9969, 0.9754, 1.0489,
+                              0.8786, 1.0023, 0.9539, 0.9843,
+                              1.1116, 0.9037, 1.0865, 1.0955,
+                              1.0865, 1.1529, 1.0507]
 
     def __len__(self):
         return self._number
@@ -73,6 +88,7 @@ class Uadataset(BaseDataset):
             label_path = self.img_list[index][1]
             image = cv2.imread(image_path, cv2.IMREAD_COLOR)
             label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
+            label = self.convert_label(label)
             image, label = self.gen_sample(image, label, self.multi_scale, self.flip)
         else:
             raise StopIteration

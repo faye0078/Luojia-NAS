@@ -3,16 +3,16 @@ import numpy as np
 import luojianet_ms as luojia
 import luojianet_ms.nn as nn
 from luojianet_ms import Model
-from luojianet_ms.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor, TimeMonitor
+from luojianet_ms.train.callback import ModelCheckpoint, CheckpointConfig
 from tqdm import tqdm
+from utils.callback import TimeLossMonitor, SegEvalCallback
+from utils.config import hrnetw48_config
 from collections import OrderedDict
 
 from dataloaders import make_data_loader
-from utils.lr_scheduler import LR_Scheduler
-from utils.saver import Saver
-from utils.evaluator import Evaluator
 
 from model.StageNet1 import SearchNet1
+from model.seg_hrnet import get_seg_model
 # from model.StageNet2 import SearchNet2
 # from model.StageNet3 import SearchNet3
 
@@ -25,16 +25,14 @@ class Trainer(object):
         self.args = args
 
         # 定义保存
-        self.saver = Saver(args)
-        self.saver.save_experiment_config()
-
-        self.opt_level = args.opt_level
+        # self.saver = Saver(args)
+        # self.saver.save_experiment_config()
 
         # 定义dataloader
-        kwargs = {'num_workers': args.workers, 'pin_memory': True, 'drop_last': True}
-        self.train_loaderA, self.train_loaderB, self.val_loader, self.nclass = make_data_loader(args, **kwargs)
+        kwargs = {'run_distribute': False, 'is_train': True, 'raw': False}
+        self.loader, self.image_size, self.num_classes = make_data_loader(args, args.batch_size, **kwargs)
 
-        self.step_size = dataset.get_dataset_size()
+        self.step_size = self.loader.get_dataset_size()
         self.criterion = nn.SoftmaxCrossEntropyWithLogits(reduction='mean')
 
         if self.args.search_stage == "first":
@@ -55,13 +53,19 @@ class Trainer(object):
             # connections = 0
             net = SearchNet3(layers, 4, connections, MixedCell, self.args.dataset, self.nclass)
 
-        lr = nn.dynamic_lr.cosine_decay_lr(args.min_lr, args.lr, args.epochs * step_size,
-                                           step_size, args.min_lr)
-        optimizer = nn.SGD(net.weight_parameters(), lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        else:
+            model_config = hrnetw48_config
+            net = get_seg_model(model_config, self.num_classes)
+
+        self.lr = nn.dynamic_lr.cosine_decay_lr(args.min_lr, args.lr, args.epochs * self.step_size,
+                                           self.step_size, 10)
+        # net.weight_parameters()
+        optimizer = nn.SGD(net.trainable_params(), self.lr, momentum=args.momentum, weight_decay=args.weight_decay)
         self.net, self.optimizer = net, optimizer
-        self.architect_optimizer = nn.Adam(self.net.arch_parameters(), lr=args.arch_lr, weight_decay=args.arch_weight_decay)
+        self.net.set_train(True)
+
+        # self.architect_optimizer = nn.Adam(self.net.arch_parameters(), lr=args.arch_lr, weight_decay=args.arch_weight_decay)
         # Define Evaluator
-        self.evaluator = Evaluator(self.nclass)
         # 加载模型
         self.best_pred = 0.0
         if args.resume is not None:
@@ -79,65 +83,20 @@ class Trainer(object):
 
         self.model = Model(self.net, loss_fn=self.criterion, optimizer=self.optimizer, metrics={'acc'})
 
-    def training(self, epoch):
+    def training(self):
 
-        time_cb = TimeMonitor(data_size=self.step_size)
-        loss_cb = LossMonitor()
-        config_ck = CheckpointConfig(save_checkpoint_steps=5,
+        time_loss_cb = TimeLossMonitor(lr_init=self.lr)
+        config_ck = CheckpointConfig(save_checkpoint_steps=self.step_size * 5,
                                      keep_checkpoint_max=100)
-        ckpt_cb = ModelCheckpoint(prefix="resnet", directory=self.args.save_checkpoint_path, config=config_ck)
-        cb = [time_cb, loss_cb, ckpt_cb]
+        ckpt_cb = ModelCheckpoint(prefix="search", directory=self.args.save_checkpoint_path, config=config_ck)
+        cb = [time_loss_cb, ckpt_cb]
 
+        # val callbacks
+        kwargs = {'run_distribute': False, 'is_train': False, 'raw': False}
+        eval_loader, _, _ = make_data_loader(self.args, batch_size=1, **kwargs)
+        eval_cb = SegEvalCallback(eval_loader, self.net, self.num_classes, start_epoch=self.args.eval_start,
+                                  save_path=self.args.save_checkpoint_path, interval=1)
+        cb.append(eval_cb)
 
-        self.model.train(self.args.epochs, self.dataset, callbacks=cb, sink_size=self.step_size, dataset_sink_mode=False)
-
-
-    def validation(self, epoch):
-        self.model.eval()
-        self.evaluator.reset()
-        tbar = tqdm(self.val_loader, desc='\r', ncols=80)
-        test_loss = 0.0
-
-        for i, sample in enumerate(tbar):
-            image, target = sample['image'], sample['mask']
-            if self.args.cuda:
-                image, target = image.cuda(), target.cuda()
-            with torch.no_grad():
-                output = self.model(image)
-            loss = self.criterion(output, target)
-            test_loss += loss.item()
-            tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
-            pred = output.data.cpu().numpy()
-            target = target.cpu().numpy()
-            pred = np.argmax(pred, axis=1)
-            # Add batch sample into evaluator
-            self.evaluator.add_batch(target, pred)
-
-        # Fast test during the training
-        Acc = self.evaluator.Pixel_Accuracy()
-        Acc_class = self.evaluator.Pixel_Accuracy_Class()
-        mIoU, IoU = self.evaluator.Mean_Intersection_over_Union()
-        FWIoU = self.evaluator.Frequency_Weighted_Intersection_over_Union()
-
-        print('Validation:')
-        print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.args.batch_size + image.data.shape[0]))
-        print("Acc:{}, Acc_class:{}, mIoU:{}, fwIoU: {}, IoU:{}".format(Acc, Acc_class, mIoU, FWIoU, IoU))
-        print('Loss: %.3f' % test_loss)
-        new_pred = mIoU
-        is_best = False
-
-        if new_pred > self.best_pred:
-            is_best = True
-            self.best_pred = new_pred
-            if torch.cuda.device_count() > 1:
-                state_dict = self.model.module.state_dict()
-            else:
-                state_dict = self.model.state_dict()
-            self.saver.save_checkpoint({
-                'epoch': epoch + 1,
-                'state_dict': state_dict,
-                'optimizer': self.optimizer.state_dict(),
-                'best_pred': self.best_pred,
-            }, is_best, 'epoch{}_checkpoint.pth.tar'.format(str(epoch + 1)))
-
-        self.saver.save_train_info(test_loss, epoch, Acc, mIoU, FWIoU, IoU, is_best)
+        # train callbacks
+        self.model.train(self.args.epochs - self.start_epoch, self.loader, callbacks=cb, sink_size=self.step_size, dataset_sink_mode=False)
