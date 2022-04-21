@@ -15,7 +15,7 @@ class ReLUConvBN(nn.Module):
         self.scale = 1
         self.op = nn.SequentialCell(
             nn.ReLU(),
-            nn.Conv2d(C_in, C_out, kernel_size, padding=padding, bias=False),
+            nn.Conv2d(C_in, C_out, kernel_size, padding=0),
             nn.BatchNorm2d(C_out)
         )
 
@@ -32,14 +32,18 @@ class ReLUConvBN(nn.Module):
     def _initialize_weights(self):
         for _, cell in self.cells_and_names():
             if isinstance(cell, nn.Conv2d):
-                weight_init.initializer(weight_init.XavierUniform(),
-                                        cell.weight.shape,
-                                        cell.weight.dtype)
-
+                cell.weight.set_data(weight_init.initializer(weight_init.HeUniform(),
+                                                             cell.weight.shape,
+                                                             cell.weight.dtype))
+                if cell.has_bias:
+                    cell.bias.set_data(get_conv_bias(cell))
             elif isinstance(cell, nn.BatchNorm2d):
-                if cell.weight is not None:
-                    cell.weight.data.fill_(1)
-                    cell.bias.data.zero_()
+                cell.gamma.set_data(weight_init.initializer(1,
+                                                            cell.gamma.shape,
+                                                            cell.gamma.dtype))
+                cell.beta.set_data(weight_init.initializer(0,
+                                                           cell.beta.shape,
+                                                           cell.beta.dtype))
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
@@ -70,14 +74,18 @@ class ConvBNReLU(nn.Module):
     def _initialize_weights(self):
         for _, cell in self.cells_and_names():
             if isinstance(cell, nn.Conv2d):
-                weight_init.initializer(weight_init.XavierUniform(),
-                                        cell.weight.shape,
-                                        cell.weight.dtype)
-
+                cell.weight.set_data(weight_init.initializer(weight_init.HeUniform(),
+                                                             cell.weight.shape,
+                                                             cell.weight.dtype))
+                if cell.has_bias:
+                    cell.bias.set_data(get_conv_bias(cell))
             elif isinstance(cell, nn.BatchNorm2d):
-                if cell.weight is not None:
-                    cell.weight.data.fill_(1)
-                    cell.bias.data.zero_()
+                cell.gamma.set_data(weight_init.initializer(1,
+                                                            cell.gamma.shape,
+                                                            cell.gamma.dtype))
+                cell.beta.set_data(weight_init.initializer(0,
+                                                           cell.beta.shape,
+                                                           cell.beta.dtype))
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
@@ -110,14 +118,18 @@ class MixedCell(nn.Module):
     def _initialize_weights(self):
         for _, cell in self.cells_and_names():
             if isinstance(cell, nn.Conv2d):
-                weight_init.initializer(weight_init.XavierUniform(),
-                                        cell.weight.shape,
-                                        cell.weight.dtype)
-
+                cell.weight.set_data(weight_init.initializer(weight_init.HeUniform(),
+                                                             cell.weight.shape,
+                                                             cell.weight.dtype))
+                if cell.has_bias:
+                    cell.bias.set_data(get_conv_bias(cell))
             elif isinstance(cell, nn.BatchNorm2d):
-                if cell.weight is not None:
-                    cell.weight.data.fill_(1)
-                    cell.bias.data.zero_()
+                cell.gamma.set_data(weight_init.initializer(1,
+                                                            cell.gamma.shape,
+                                                            cell.gamma.dtype))
+                cell.beta.set_data(weight_init.initializer(0,
+                                                           cell.beta.shape,
+                                                           cell.beta.dtype))
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
@@ -148,14 +160,18 @@ class MixedRetrainCell(nn.Module):
     def _initialize_weights(self):
         for _, cell in self.cells_and_names():
             if isinstance(cell, nn.Conv2d):
-                weight_init.initializer(weight_init.XavierUniform(),
-                                        cell.weight.shape,
-                                        cell.weight.dtype)
-
+                cell.weight.set_data(weight_init.initializer(weight_init.HeUniform(),
+                                                             cell.weight.shape,
+                                                             cell.weight.dtype))
+                if cell.has_bias:
+                    cell.bias.set_data(get_conv_bias(cell))
             elif isinstance(cell, nn.BatchNorm2d):
-                if cell.weight is not None:
-                    cell.weight.data.fill_(1)
-                    cell.bias.data.zero_()
+                cell.gamma.set_data(weight_init.initializer(1,
+                                                            cell.gamma.shape,
+                                                            cell.gamma.dtype))
+                cell.beta.set_data(weight_init.initializer(0,
+                                                           cell.beta.shape,
+                                                           cell.beta.dtype))
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
@@ -185,14 +201,56 @@ class Fusion(nn.Module):
     def _initialize_weights(self):
         for _, cell in self.cells_and_names():
             if isinstance(cell, nn.Conv2d):
-                weight_init.initializer(weight_init.XavierUniform(),
-                                        cell.weight.shape,
-                                        cell.weight.dtype)
-
+                cell.weight.set_data(weight_init.initializer(weight_init.HeUniform(),
+                                                             cell.weight.shape,
+                                                             cell.weight.dtype))
+                if cell.has_bias:
+                    cell.bias.set_data(get_conv_bias(cell))
             elif isinstance(cell, nn.BatchNorm2d):
-                if cell.weight is not None:
-                    cell.weight.data.fill_(1)
-                    cell.bias.data.zero_()
+                cell.gamma.set_data(weight_init.initializer(1,
+                                                            cell.gamma.shape,
+                                                            cell.gamma.dtype))
+                cell.beta.set_data(weight_init.initializer(0,
+                                                           cell.beta.shape,
+                                                           cell.beta.dtype))
 
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
+
+
+
+
+def calculate_fan_in_and_fan_out(shape):
+    """
+    calculate fan_in and fan_out
+
+    Args:
+        shape (tuple): input shape.
+
+    Returns:
+        Tuple, a tuple with two elements, the first element is `n_in` and the second element is `n_out`.
+    """
+    dimensions = len(shape)
+    if dimensions < 2:
+        raise ValueError("Fan in and fan out can not be computed for tensor with fewer than 2 dimensions")
+    if dimensions == 2:
+        fan_in = shape[1]
+        fan_out = shape[0]
+    else:
+        num_input_fmaps = shape[1]
+        num_output_fmaps = shape[0]
+        receptive_field_size = 1
+        if dimensions > 2:
+            receptive_field_size = shape[2] * shape[3]
+        fan_in = num_input_fmaps * receptive_field_size
+        fan_out = num_output_fmaps * receptive_field_size
+    return fan_in, fan_out
+
+def get_conv_bias(cell):
+    """Bias initializer for conv."""
+    weight = weight_init.initializer(weight_init.HeUniform(negative_slope=math.sqrt(5)),
+                                     cell.weight.shape, cell.weight.dtype).to_tensor()
+    fan_in, _ = calculate_fan_in_and_fan_out(weight.shape)
+    bound = 1 / math.sqrt(fan_in)
+    return weight_init.initializer(weight_init.Uniform(scale=bound),
+                                   cell.bias.shape, cell.bias.dtype)

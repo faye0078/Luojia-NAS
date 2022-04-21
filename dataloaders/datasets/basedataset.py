@@ -51,7 +51,7 @@ class BaseDataset:
 
     def input_transform(self, image):
         """Transform data format of images."""
-        image = image.astype(np.float32)[:, :, ::-1]
+        image = image.astype(np.float32)
         image = image / 255.0
         image -= self.mean
         image /= self.std

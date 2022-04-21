@@ -19,8 +19,8 @@ def main():
     setup_seed(args.seed)
     trainer = Trainer(args)
 
-    print('Total Epoches:', trainer.args.epochs)
-    trainer.training()
+    print('Total Epoches:', args.epochs)
+    trainer.training(args.epochs)
 
 
 if __name__ == "__main__":

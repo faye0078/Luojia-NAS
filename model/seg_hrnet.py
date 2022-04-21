@@ -23,6 +23,7 @@ import luojianet_ms.ops as ops
 from luojianet_ms.common import initializer
 from luojianet_ms.nn import BatchNorm2d
 
+
 BN_MOMENTUM = 0.99
 logger = logging.getLogger(__name__)
 
@@ -448,9 +449,9 @@ class HighResolutionNet(nn.Module):
 
         return nn.SequentialCell(modules), num_inchannels
 
-    def call(self, x):
+    def call(self, input):
         """HRNet construction."""
-        x = self.conv1(x)
+        x = self.conv1(input)
         x = self.bn1(x)
         x = self.relu1(x)
         x = self.conv2(x)
@@ -498,7 +499,11 @@ class HighResolutionNet(nn.Module):
         x = self.concat((x1, x2, x3, x4))
 
         x = self.last_layer(x)
+        h, w = ops.Shape()(input)[2:]
+        x = self.resize_bilinear(x, size=(h, w))
 
+        transpose = ops.Transpose()
+        x = transpose(x, (0, 2, 3, 1))
         return x
 
 

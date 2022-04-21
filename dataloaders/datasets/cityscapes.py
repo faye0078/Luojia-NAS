@@ -16,11 +16,11 @@
 import cv2
 import numpy as np
 
-import mindspore.ops as P
-from mindspore import Tensor
-from mindspore.common import dtype
+import luojianet_ms.ops as P
+from luojianet_ms import Tensor
+from luojianet_ms.common import dtype
 
-from src.dataset.basedataset import BaseDataset
+from dataloaders.datasets.basedataset import BaseDataset
 
 
 class Cityscapes(BaseDataset):

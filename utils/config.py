@@ -47,10 +47,10 @@ def obtain_search_args():
     parser.add_argument('--checkname', type=str, default='test', help='set the checkpoint name')
     parser.add_argument('--save_checkpoint_path', type=str, default='/media/dell/DATA/wy/luojis_NAS/saved_model', help='put the path to resuming file if needed')
     parser.add_argument('--model_encode_path', type=str, default='/media/dell/DATA/wy/Seg_NAS/model/model_encode/GID-5/14layers_mixedcell1_3operation/third_connect_4.npy')
-    parser.add_argument('--search_stage', type=str, default='hrnet', choices=['first', 'second', 'third', 'hrnet'], help='witch search stage')
+    parser.add_argument('--search_stage', type=str, default='first', choices=['first', 'second', 'third', 'hrnet'], help='witch search stage')
 
-    parser.add_argument('--batch-size', type=int, default=2, metavar='N', help='input batch size for training (default: auto)')
-    parser.add_argument('--dataset', type=str, default='uadataset', choices=['uadataset'], help='dataset name (default: pascal)')
+    parser.add_argument('--batch-size', type=int, default=4, metavar='N', help='input batch size for training (default: auto)')
+    parser.add_argument('--dataset', type=str, default='uadataset', choices=['uadataset', 'cityscapes'], help='dataset name (default: pascal)')
     parser.add_argument('--data_path', type=str, default='/media/dell/DATA/wy/data', help='dataset root path')
 
     parser.add_argument('--workers', type=int, default=0,metavar='N', help='dataloader threads')

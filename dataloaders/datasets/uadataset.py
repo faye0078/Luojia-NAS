@@ -1,25 +1,11 @@
-# Copyright 2021 Huawei Technologies Co., Ltd
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ============================================================================
-"""Dataset Cityscapes generator."""
+"""Dataset FU generator."""
 import cv2
 import numpy as np
 
 import luojianet_ms.ops as P
 from luojianet_ms import Tensor
 from luojianet_ms.common import dtype
-
+import rasterio
 from dataloaders.datasets.basedataset import BaseDataset
 
 
@@ -46,9 +32,9 @@ class Uadataset(BaseDataset):
         self._index = 0
         self.root = root
         if is_train:
-            self.list_path = root + "/uadataset/map_uad_512_train.lst"
+            self.list_path = root + "/uadataset/uad_512_train.lst"
         else:
-            self.list_path = root + "/uadataset/map_uad_512_val.lst"
+            self.list_path = root + "/uadataset/uad_512_val.lst"
         self.num_classes = num_classes
         self.multi_scale = multi_scale
         self.flip = flip
@@ -61,7 +47,10 @@ class Uadataset(BaseDataset):
         if num_samples:
             self.files = self.files[:num_samples]
 
-        self.label_mapping = None
+        self.all_classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        self.valid_classes = [255, 0, 1, 2, 3, 4, 5, 6, 255, 255, 7, 8, 9, 10, 11, 255]
+
+        self.label_mapping = dict(zip(self.all_classes, self.valid_classes))
         self.class_weights = None
 
     def __len__(self):
@@ -71,8 +60,13 @@ class Uadataset(BaseDataset):
         if index < self._number:
             image_path = self.img_list[index][0]
             label_path = self.img_list[index][1]
-            image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-            label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
+            with rasterio.open(image_path) as image:
+                image = image.read().astype(np.float32).transpose(1, 2, 0)
+            with rasterio.open(label_path) as label:
+                label = label.read()
+            if len(label.shape) == 3:
+                label = label[0]
+            label = self.convert_label(label)
             image, label = self.gen_sample(image, label, self.multi_scale, self.flip)
         else:
             raise StopIteration

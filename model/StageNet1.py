@@ -33,32 +33,32 @@ class SearchNet1(nn.Module):
         else:
             input_channel = 3
         self.stem0 = nn.SequentialCell(
-            nn.Conv2d(input_channel, half_base * self.block_multiplier, 3, stride=2, padding=1),
+            nn.Conv2d(input_channel, half_base * self.block_multiplier, 3, stride=2, padding=0),
             nn.BatchNorm2d(half_base * self.block_multiplier),
             nn.ReLU()
         )
         self.stem1 = nn.SequentialCell(
-            nn.Conv2d(half_base * self.block_multiplier, half_base * self.block_multiplier, 3, stride=1, padding=1),
+            nn.Conv2d(half_base * self.block_multiplier, half_base * self.block_multiplier, 3, stride=1, padding=0),
             nn.BatchNorm2d(half_base * self.block_multiplier),
             nn.ReLU()
         )
         self.stem2 = nn.SequentialCell(
-            nn.Conv2d(half_base * self.block_multiplier, self.base_multiplier * self.block_multiplier, 3, stride=2,padding=1),
+            nn.Conv2d(half_base * self.block_multiplier, self.base_multiplier * self.block_multiplier, 3, stride=2,padding=0),
             nn.BatchNorm2d(self.base_multiplier * self.block_multiplier),
             nn.ReLU()
         )
-        self.cells = nn.CellList()
+        self.mycells = nn.CellList()
 
         self.cells_index = []
         multi_dict = {0: 1, 1: 2, 2: 4, 3: 8}
         max_num_connect = 0
         num_last_features = 0
         for i in range(len(self.layers)):
-            self.cells.append(nn.CellList())
+            self.mycells.append(nn.CellList())
             self.cells_index.append([])
             for j in range(self.depth):
 
-                self.cells[i].append(nn.CellList())
+                self.mycells[i].append(nn.CellList())
                 self.cells_index[i].append(OrderedDict())
 
                 num_connect = 0
@@ -66,13 +66,13 @@ class SearchNet1(nn.Module):
                     if ([i, j] == connection[1]).all():
                         num_connect += 1
                         if connection[0][0] == -1:
-                            self.cells[i][j].append((self.base_multiplier * multi_dict[0],
+                            self.mycells[i][j].append(cell(self.base_multiplier * multi_dict[0],
                                                          self.base_multiplier * multi_dict[connection[1][1]]))
-                            self.cells_index[i][j][str(connection[0])] = int(len(self.cells[i][j]) - 1)
+                            self.cells_index[i][j][str(connection[0])] = int(len(self.mycells[i][j]) - 1)
                         else:
-                            self.cells[i][j].append(cell(self.base_multiplier * multi_dict[connection[0][1]],
+                            self.mycells[i][j].append(cell(self.base_multiplier * multi_dict[connection[0][1]],
                                                 self.base_multiplier * multi_dict[connection[1][1]]))
-                            self.cells_index[i][j][str(connection[0])] = int(len(self.cells[i][j]) - 1)
+                            self.cells_index[i][j][str(connection[0])] = int(len(self.mycells[i][j]) - 1)
                 self.node_add_num[i][j] = num_connect
 
                 if i == len(self.layers) -1 and num_connect != 0:
@@ -81,10 +81,10 @@ class SearchNet1(nn.Module):
                 if num_connect > max_num_connect:
                     max_num_connect = num_connect
 
-        self.last_conv = nn.SequentialCell(nn.Conv2d(num_last_features, 256, kernel_size=3, stride=1, padding=1),
+        self.last_conv = nn.SequentialCell(nn.Conv2d(num_last_features, 256, kernel_size=3, stride=1, padding=0),
                                        nn.BatchNorm2d(256),
                                        nn.Dropout(0.5),
-                                       nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+                                       nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=0),
                                        nn.BatchNorm2d(256),
                                        nn.Dropout(0.1),
                                        nn.Conv2d(256, num_classes, kernel_size=1, stride=1))
@@ -100,9 +100,11 @@ class SearchNet1(nn.Module):
         temp = self.stem1(temp)
         pre_feature = self.stem2(temp)
 
-        normalized_betas = ops.StandardNormal(len(self.layers), self.depth, self.max_num_connect)
+        rand_standard = ops.StandardNormal(seed=1)
 
-        for i in range(len(self.layers)):
+        normalized_betas = rand_standard(14, self.depth, self.max_num_connect)
+
+        for i in range(14):
             for j in range(self.depth):
                 num = int(self.node_add_num[i][j])
                 if num == 0:
@@ -110,7 +112,7 @@ class SearchNet1(nn.Module):
                 normalized_betas[i][j][:num] = ops.Softmax(self.betas[i][j][:num], dim=-1) * (num / self.max_num_connect)
                 # if the second search progress, the denominato should be 'num'
 
-        for i in range(len(self.layers)):
+        for i in range(14):
             features.append([])
             for j in range(self.depth):
                 features[i].append(0)
@@ -119,15 +121,19 @@ class SearchNet1(nn.Module):
                     if ([i, j] == connection[1]).all():
                         if connection[0][0] == -1:
                             index = self.cells_index[i][j][str(connection[0])]
-                            features[i][j] += normalized_betas[i][j][k] * self.cells[i][j][index](pre_feature)
+                            features[i][j] += normalized_betas[i][j][k] * self.mycells[i][j][index](pre_feature)
                         else:
                             index = self.cells_index[i][j][str(connection[0])]
-                            features[i][j] += normalized_betas[i][j][k] * self.cells[i][j][index](features[connection[0][0]][connection[0][1]])
+                            features[i][j] += normalized_betas[i][j][k] * self.mycells[i][j][index](features[connection[0][0]][connection[0][1]])
                         k += 1
 
-        last_features = [feature for feature in features[len(self.layers)-1] if feature != 0] # TODO: how to replace?
-        last_features = [nn.ResizeBilinear()(feature, size=last_features[0].size()[2:], align_corners=True) for feature in last_features]
-        result = ops.Concat(last_features, dim=1)
+        last_features = features[len(self.layers)-1]# TODO: how to replace?
+        last_feature0 = nn.ResizeBilinear()(last_features[0], size=last_features[0].size()[2:], align_corners=True)
+        last_feature1 = nn.ResizeBilinear()(last_features[1], size=last_features[0].size()[2:], align_corners=True)
+        last_feature2 = nn.ResizeBilinear()(last_features[2], size=last_features[0].size()[2:], align_corners=True)
+        last_feature3 = nn.ResizeBilinear()(last_features[3], size=last_features[0].size()[2:], align_corners=True)
+
+        result = ops.Concat((last_feature0, last_feature1, last_feature2, last_feature3), dim=1)
         result = self.last_conv(result)
         result = nn.ResizeBilinear()(result, size=x.size()[2:], align_corners=True)
         return result
@@ -142,12 +148,14 @@ class SearchNet1(nn.Module):
             'betas',
         ]
 
-        self._arch_parameters = [luojia.Parameter(name, param) for name, param in
+        self._arch_parameters = [luojia.Parameter(named_param[1], named_param[0]) for named_param in
                                  zip(self._arch_param_names, self._arch_parameters)] # TODO: 是否需要多次声明 grad=True
 
     def arch_parameters(self):
-        return [param for name, param in self.parameters_and_names() if
-                name in self._arch_param_names]
+        # return [param for name, param in self.parameters_and_names() if
+        #         name in self._arch_param_names]
+
+        return self._arch_parameters
 
     def weight_parameters(self):
         return [param for name, param in self.parameters_and_names() if # TODO: debug the return type

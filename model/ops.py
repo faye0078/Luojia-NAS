@@ -186,7 +186,7 @@ class Edge(nn.Module):
         super(Edge, self).__init__()
         self.out_channels = C_out
 
-        self.filter = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=1, bias=False)
+        self.filter = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=0, bias=False)
         G = luojia.Tensor([[1.0, 2.0, -1.0], [2.0, 0.0, -2.0], [1.0, -2.0, -1.0]])
         G = G.unsqueeze(0).unsqueeze(0)
         self.filter.weight = luojia.Parameter(G)
@@ -262,7 +262,7 @@ class Denoising(nn.Module):
         super(Denoising, self).__init__()
         self.out_channels = C_out
 
-        self.filter = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=1, bias=False)
+        self.filter = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=0, bias=False)
         G = luojia.Tensor([[1/9, 1/9, 1/9], [1/9, 1/9, 1/9], [1/9, 1/9, 1/9]])
         G = G.unsqueeze(0).unsqueeze(0)
         self.filter.weight = luojia.Parameter(G)
