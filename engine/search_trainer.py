@@ -89,6 +89,8 @@ class Trainer(object):
 
         self.net_with_criterion = nn.WithLossCell(self.net, self.criterion)
         self.train_net = MyTrainStep(self.net_with_criterion, self.optimizer)
+        self.arch_net = MyTrainStep(self.net_with_criterion, self.architect_optimizer)
+
         self.val_net = MyWithEvalCell(self.net)
 
     def training(self, epochs):
@@ -101,7 +103,12 @@ class Trainer(object):
                 self.train_net(d["image"], d["label"])
                 loss = self.net_with_criterion(d["image"], d["label"])
                 train_loss += float(loss.asnumpy())
+
+                self.args.alpha_epochs = 0
+                # if epoch > self.args.alpha_epochs:
+                self.arch_net(d["image"], d["label"])
                 tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
+
 
             if self.args.search_stage == "third":
                 alphas = self.net.alphas.cpu().detach().numpy()
@@ -176,6 +183,26 @@ class MyTrainStep(nn.TrainOneStepCell):
         grads = self.grad(self.network, weights)(data, label)
         return loss, self.optimizer(grads)
 
+class TrainOneStepCell(nn.Module):
+    def __init__(self, network, optimizer, sens=1.0):
+        """参数初始化"""
+        super(TrainOneStepCell, self).__init__(auto_prefix=False)
+        self.network = network
+        # 使用tuple包装weight
+        self.weights = ParameterTuple(network.trainable_params())
+        self.optimizer = optimizer
+        # 定义梯度函数
+        self.grad = ops.GradOperation(get_by_list=True, sens_param=True)
+        self.sens = sens
+
+    def call(self, data, label):
+        """构建训练过程"""
+        weights = self.weights
+        loss = self.network(data, label)
+        # 为反向传播设定系数
+        sens = ops.Fill()(ops.DType()(loss), ops.Shape()(loss), self.sens)
+        grads = self.grad(self.network, weights)(data, label, sens)
+        return loss, self.optimizer(grads)
 
 class MyWithEvalCell(nn.Module):
     """定义验证流程"""

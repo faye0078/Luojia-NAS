@@ -17,6 +17,7 @@ class SearchNet1(nn.Module):
             connections: the node connections
             cell: cell type
             dataset: dataset
+            num_classes: the number of classes
             base_multiplier: base scale multiplier
         '''
         super(SearchNet1, self).__init__()
@@ -102,14 +103,14 @@ class SearchNet1(nn.Module):
 
         rand_standard = ops.StandardNormal(seed=1)
 
-        normalized_betas = rand_standard(14, self.depth, self.max_num_connect)
+        normalized_betas = rand_standard((14, self.depth, self.max_num_connect))
 
         for i in range(14):
             for j in range(self.depth):
                 num = int(self.node_add_num[i][j])
                 if num == 0:
                     continue
-                normalized_betas[i][j][:num] = ops.Softmax(self.betas[i][j][:num], dim=-1) * (num / self.max_num_connect)
+                normalized_betas[i][j][:num] = ops.Softmax(axis=-1)(self.betas[i][j][:num]) * (num / self.max_num_connect)
                 # if the second search progress, the denominato should be 'num'
 
         for i in range(14):
@@ -128,36 +129,37 @@ class SearchNet1(nn.Module):
                         k += 1
 
         last_features = features[len(self.layers)-1]# TODO: how to replace?
-        last_feature0 = nn.ResizeBilinear()(last_features[0], size=last_features[0].size()[2:], align_corners=True)
-        last_feature1 = nn.ResizeBilinear()(last_features[1], size=last_features[0].size()[2:], align_corners=True)
-        last_feature2 = nn.ResizeBilinear()(last_features[2], size=last_features[0].size()[2:], align_corners=True)
-        last_feature3 = nn.ResizeBilinear()(last_features[3], size=last_features[0].size()[2:], align_corners=True)
 
-        result = ops.Concat((last_feature0, last_feature1, last_feature2, last_feature3), dim=1)
+        last_feature0 = nn.ResizeBilinear()(last_features[0], size=last_features[0].shape[2:], align_corners=True)
+        last_feature1 = nn.ResizeBilinear()(last_features[1], size=last_features[0].shape[2:], align_corners=True)
+        last_feature2 = nn.ResizeBilinear()(last_features[2], size=last_features[0].shape[2:], align_corners=True)
+        last_feature3 = nn.ResizeBilinear()(last_features[3], size=last_features[0].shape[2:], align_corners=True)
+
+        result = ops.Concat(axis=1)((last_feature0, last_feature1, last_feature2, last_feature3))
         result = self.last_conv(result)
-        result = nn.ResizeBilinear()(result, size=x.size()[2:], align_corners=True)
+        result = nn.ResizeBilinear()(result, size=x.shape[2:], align_corners=True)
+        result = ops.Transpose()(result, (0, 2, 3, 1))
+        print(self.betas[0][0][:])
         return result
 
     def initialize_betas(self):
-        betas = (1e-3 * ops.StandardNormal()((len(self.layers), self.depth, self.max_num_connect)))# TODO: 含义是什么？
-
-        self._arch_parameters = [
-            betas,
-        ]
         self._arch_param_names = [
             'betas',
         ]
 
-        self._arch_parameters = [luojia.Parameter(named_param[1], named_param[0]) for named_param in
-                                 zip(self._arch_param_names, self._arch_parameters)] # TODO: 是否需要多次声明 grad=True
+        betas = (1e-3 * ops.StandardNormal()((len(self.layers), self.depth, self.max_num_connect)))
+
+        self.betas = luojia.Parameter(betas, name='betas')
+
 
     def arch_parameters(self):
         # return [param for name, param in self.parameters_and_names() if
         #         name in self._arch_param_names]
 
-        return self._arch_parameters
+        return [param for name, param in self.parameters_and_names() if
+                name in self._arch_param_names]
 
     def weight_parameters(self):
-        return [param for name, param in self.parameters_and_names() if # TODO: debug the return type
+        return [param for name, param in self.parameters_and_names() if
                 name not in self._arch_param_names]
 
