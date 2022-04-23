@@ -5,7 +5,7 @@ from engine.search_trainer import Trainer
 from luojianet_ms import context, set_seed
 
 # 设置所使用的GPU GRAPH_MODE
-context.set_context(mode=context.GRAPH_MODE, device_target='GPU', device_id=0)
+context.set_context(mode=context.GRAPH_MODE, device_target='GPU', device_id=3)
 
 def setup_seed(seed):
     np.random.seed(seed)

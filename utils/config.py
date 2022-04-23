@@ -43,13 +43,12 @@ def obtain_search_args():
     parser = argparse.ArgumentParser(description="search args")
 
     # checking point
-    parser.add_argument('--resume', type=str, default='/media/dell/DATA/wy/Luojia-NAS/run/uadataset/test/experiment_140/epoch1_checkpoint.ckpt', help='put the path to resuming file if needed')
+    parser.add_argument('--resume', type=str, default=None, help='put the path to resuming file if needed')
     parser.add_argument('--checkname', type=str, default='test', help='set the checkpoint name')
-    parser.add_argument('--save_checkpoint_path', type=str, default='/media/dell/DATA/wy/luojis_NAS/saved_model', help='put the path to resuming file if needed')
     parser.add_argument('--model_encode_path', type=str, default='/media/dell/DATA/wy/Seg_NAS/model/model_encode/GID-5/14layers_mixedcell1_3operation/first_connect_4.npy')
     parser.add_argument('--search_stage', type=str, default='first', choices=['first', 'second', 'third', 'hrnet'], help='witch search stage')
 
-    parser.add_argument('--batch-size', type=int, default=4, metavar='N', help='input batch size for training (default: auto)')
+    parser.add_argument('--batch-size', type=int, default=6, metavar='N', help='input batch size for training (default: auto)')
     parser.add_argument('--dataset', type=str, default='uadataset', choices=['uadataset', 'cityscapes'], help='dataset name (default: pascal)')
     parser.add_argument('--data_path', type=str, default='/media/dell/DATA/wy/data', help='dataset root path')
 
@@ -66,7 +65,8 @@ def obtain_search_args():
     parser.add_argument('--nclass', type=int, default=15, help='number of class')
 
     # training hyper params
-    parser.add_argument('--epochs', type=int, default=60, metavar='N', help='number of epochs to train (default: auto)')
+    parser.add_argument('--epochs', type=int, default=60, metavar='N', help='number of epochs to train')
+    parser.add_argument('--alpha_epochs', type=int, default=20, metavar='N', help='number of alpha epochs to train')
     parser.add_argument('--start_epoch', type=int, default=0, metavar='N', help='start epochs (default:0)')
     parser.add_argument('--eval_start', type=int, default=20, metavar='N', help='start eval epochs (default:0)')
     parser.add_argument('--filter_multiplier', type=int, default=8)

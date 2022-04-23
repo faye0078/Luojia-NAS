@@ -90,6 +90,7 @@ class Trainer(object):
 
         train_loss = 0.0
         tbar = tqdm(self.train_loaderA.create_dict_iterator(), ncols=80, total=self.step_size)
+        trainloader_B = self.train_loaderB.create_dict_iterator()
         for epoch in range(epochs):
             self.net.set_train(True)
             for i, d in enumerate(tbar):
@@ -97,9 +98,9 @@ class Trainer(object):
                 loss = self.net_with_criterion(d["image"], d["label"])
                 train_loss += float(loss.asnumpy())
 
-                # if epoch > self.args.alpha_epochs:
-                search = next(iter(self.train_loaderB.create_dict_iterator()))
-                self.arch_net(search["image"], search["label"])
+                if epoch > self.args.alpha_epochs:
+                    search = next(iter(trainloader_B))
+                    self.arch_net(search["image"], search["label"])
                 tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 
             if self.args.search_stage == "third":

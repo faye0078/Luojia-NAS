@@ -101,8 +101,7 @@ class SearchNet1(nn.Module):
         temp = self.stem1(temp)
         pre_feature = self.stem2(temp)
 
-        rand_standard = ops.StandardNormal(seed=1)
-
+        rand_standard = ops.StandardNormal()
         normalized_betas = rand_standard((14, self.depth, self.max_num_connect))
 
         for i in range(14):

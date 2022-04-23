@@ -2,11 +2,11 @@ import numpy as np
 import luojianet_ms.nn as nn
 import luojianet_ms.ops as ops
 import luojianet_ms.dataset as ds
-from luojianet_ms import Parameter, Tensor
+from luojianet_ms import Parameter, Tensor, context
 from luojianet_ms import ParameterTuple
 
 np.random.seed(4)
-
+context.set_context(mode=context.GRAPH_MODE, device_target='GPU', device_id=3)
 class LinearNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -67,14 +67,14 @@ net = LinearNet()
 # 设定损失函数
 crit = nn.MSELoss()
 # 设定优化器
-opt = nn.Adam(params=list(filter(lambda x: 'wang' in x.name, net.get_parameters())))
+opt = nn.Adam(params=list(filter(lambda x: 'wang' in x.name, net.get_parameters())), learning_rate=0.2)
 # 引入损失函数
 net_with_criterion = nn.WithLossCell(net, crit)
 # 自定义网络训练
 train_net = TrainOneStepCell(net_with_criterion, opt)
 
 # 获取训练过程数据
-for i in range(300):
+for i in range(3000):
     for d in dataset.create_dict_iterator():
         train_net(d["data"], d["label"])
         print(net_with_criterion(d["data"], d["label"]))

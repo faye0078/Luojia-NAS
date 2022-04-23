@@ -66,7 +66,6 @@ class Uadataset(BaseDataset):
             label_path = self.img_list[index][1]
             with rasterio.open(image_path) as image:
                 image = image.read().astype(np.float32).transpose(1, 2, 0)
-                image.close()
             with rasterio.open(label_path) as label:
                 label = label.read()
             if len(label.shape) == 3:
