@@ -2,26 +2,19 @@ import os
 import numpy as np
 import luojianet_ms as luojia
 import luojianet_ms.nn as nn
+
 from luojianet_ms import Model, ParameterTuple, ops, load_param_into_net
 from tqdm import tqdm
-from luojianet_ms.train.callback import ModelCheckpoint, CheckpointConfig
-from tqdm import tqdm
-from utils.callback import TimeLossMonitor, SegEvalCallback
 from utils.config import hrnetw48_config
-from collections import OrderedDict
 from utils.evaluator import Evaluator
 from utils.saver import Saver
-
 from dataloaders import make_data_loader
-
 from model.StageNet1 import SearchNet1
 from model.seg_hrnet import get_seg_model
 # from model.StageNet2 import SearchNet2
 # from model.StageNet3 import SearchNet3
-
-from utils.copy_state_dict import copy_state_dict
 from model.cell import ReLUConvBN, MixedCell
-from luojianet_ms.common.initializer import initializer
+
 
 class Trainer(object):
     def __init__(self, args):

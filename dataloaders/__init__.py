@@ -2,7 +2,6 @@
 import os
 import luojianet_ms.dataset.engine as de
 from dataloaders.datasets.uadataset import Uadataset
-from dataloaders.datasets.cityscapes import Cityscapes
 
 def make_data_loader(args, batch_size=4, run_distribute=False, is_train=True, raw=False):
     """
