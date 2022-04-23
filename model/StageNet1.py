@@ -113,6 +113,8 @@ class SearchNet1(nn.Module):
                 normalized_betas[i][j][:num] = ops.Softmax(axis=-1)(self.betas[i][j][:num]) * (num / self.max_num_connect)
                 # if the second search progress, the denominato should be 'num'
 
+        print(normalized_betas)
+
         for i in range(14):
             features.append([])
             for j in range(self.depth):
@@ -139,7 +141,6 @@ class SearchNet1(nn.Module):
         result = self.last_conv(result)
         result = nn.ResizeBilinear()(result, size=x.shape[2:], align_corners=True)
         result = ops.Transpose()(result, (0, 2, 3, 1))
-        print(self.betas[0][0][:])
         return result
 
     def initialize_betas(self):

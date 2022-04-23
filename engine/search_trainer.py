@@ -21,6 +21,7 @@ from model.seg_hrnet import get_seg_model
 
 from utils.copy_state_dict import copy_state_dict
 from model.cell import ReLUConvBN, MixedCell
+from luojianet_ms.common.initializer import initializer
 
 class Trainer(object):
     def __init__(self, args):
@@ -88,8 +89,10 @@ class Trainer(object):
             self.start_epoch = 0
 
         self.net_with_criterion = nn.WithLossCell(self.net, self.criterion)
+        self.arch_with_criterion = nn.WithLossCell(self.net, self.criterion)
+
         self.train_net = MyTrainStep(self.net_with_criterion, self.optimizer)
-        self.arch_net = MyTrainStep(self.net_with_criterion, self.architect_optimizer)
+        self.arch_net = TrainOneStepCell(self.arch_with_criterion, self.architect_optimizer)
 
         self.val_net = MyWithEvalCell(self.net)
 
@@ -184,24 +187,25 @@ class MyTrainStep(nn.TrainOneStepCell):
         return loss, self.optimizer(grads)
 
 class TrainOneStepCell(nn.Module):
-    def __init__(self, network, optimizer, sens=1.0):
+    def __init__(self, network, optimizer):
         """参数初始化"""
         super(TrainOneStepCell, self).__init__(auto_prefix=False)
         self.network = network
         # 使用tuple包装weight
-        self.weights = ParameterTuple(network.trainable_params())
         self.optimizer = optimizer
+        self.weights = ParameterTuple(list(filter(lambda x: 'betas' in x.name, self.get_parameters())))
+        # print(self.weights)
         # 定义梯度函数
-        self.grad = ops.GradOperation(get_by_list=True, sens_param=True)
-        self.sens = sens
+        self.grad = ops.GradOperation(get_by_list=True)
 
     def call(self, data, label):
         """构建训练过程"""
         weights = self.weights
         loss = self.network(data, label)
-        # 为反向传播设定系数
-        sens = ops.Fill()(ops.DType()(loss), ops.Shape()(loss), self.sens)
-        grads = self.grad(self.network, weights)(data, label, sens)
+
+        grads = self.grad(self.network, weights)(data, label)
+        for grad in grads:
+            print(grad)
         return loss, self.optimizer(grads)
 
 class MyWithEvalCell(nn.Module):
