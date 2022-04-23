@@ -2,7 +2,7 @@ import os
 import numpy as np
 import luojianet_ms as luojia
 import luojianet_ms.nn as nn
-from luojianet_ms import Model, ParameterTuple, ops
+from luojianet_ms import Model, ParameterTuple, ops, load_param_into_net
 from tqdm import tqdm
 from luojianet_ms.train.callback import ModelCheckpoint, CheckpointConfig
 from tqdm import tqdm
@@ -33,13 +33,13 @@ class Trainer(object):
 
         # 定义dataloader
         kwargs = {'run_distribute': False, 'is_train': True, 'raw': False}
-        self.train_loader, self.image_size, self.num_classes = make_data_loader(args, args.batch_size, **kwargs)
+        self.train_loaderA, self.train_loaderB, self.image_size, self.num_classes = make_data_loader(args, args.batch_size, **kwargs)
 
         # 定义dataloader
-        kwargs = {'run_distribute': False, 'is_train': True, 'raw': False}
-        self.val_loader, self.image_size, self.num_classes = make_data_loader(args, args.batch_size, **kwargs)
+        kwargs = {'run_distribute': False, 'is_train': False, 'raw': False}
+        self.val_loader, _, _ = make_data_loader(args, args.batch_size, **kwargs)
 
-        self.step_size = self.train_loader.get_dataset_size()
+        self.step_size = self.train_loaderA.get_dataset_size()
         self.criterion = nn.SoftmaxCrossEntropyWithLogits(reduction='mean', sparse=True)
 
         if self.args.search_stage == "first":
@@ -79,12 +79,9 @@ class Trainer(object):
             if not os.path.isfile(args.resume):
                 raise RuntimeError("=> no checkpoint found at '{}'".format(args.resume))
             checkpoint = luojia.load_checkpoint(args.resume)
-            self.start_epoch = checkpoint['epoch']
-            self.net.load_param_into_net(checkpoint['state_dict'])
-            copy_state_dict(self.optimizer.state_dict(), checkpoint['optimizer']) # TODO: The details in loading optimizer
-            self.best_pred = checkpoint['best_pred']
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.resume, checkpoint['epoch']))
+            param_not_load = load_param_into_net(self.net, checkpoint)
+            print(param_not_load)
+            print("=> loaded checkpoint '{}'".format(args.resume))
         else:
             self.start_epoch = 0
 
@@ -99,7 +96,7 @@ class Trainer(object):
     def training(self, epochs):
 
         train_loss = 0.0
-        tbar = tqdm(self.train_loader.create_dict_iterator(), ncols=80, total=self.step_size)
+        tbar = tqdm(self.train_loaderA.create_dict_iterator(), ncols=80, total=self.step_size)
         for epoch in range(epochs):
             self.net.set_train(True)
             for i, d in enumerate(tbar):
@@ -107,21 +104,20 @@ class Trainer(object):
                 loss = self.net_with_criterion(d["image"], d["label"])
                 train_loss += float(loss.asnumpy())
 
-                self.args.alpha_epochs = 0
                 # if epoch > self.args.alpha_epochs:
-                self.arch_net(d["image"], d["label"])
+                search = next(iter(self.train_loaderB.create_dict_iterator()))
+                self.arch_net(search["image"], search["label"])
                 tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 
-
             if self.args.search_stage == "third":
-                alphas = self.net.alphas.cpu().detach().numpy()
+                alphas = self.net.alphas.asnumpy()
                 alphas_dir = '/media/dell/DATA/wy/Seg_NAS/' + self.saver.experiment_dir + '/alphas'
                 if not os.path.exists(alphas_dir):
                     os.makedirs(alphas_dir)
                 alphas_path = alphas_dir + '/alphas_{}.npy'.format(epoch)
                 np.save(alphas_path, alphas, allow_pickle=True)
             else:
-                betas = self.net.betas.cpu().detach().numpy()
+                betas = self.net.betas.asnumpy()
                 betas_dir = '/media/dell/DATA/wy/Seg_NAS/' + self.saver.experiment_dir + '/betas'
                 if not os.path.exists(betas_dir):
                     os.makedirs(betas_dir)
@@ -131,19 +127,21 @@ class Trainer(object):
             self.validation(epoch)
 
     def validation(self, epoch):
-
+        self.net.set_train(False)
         test_loss = 0.0
         tbar = tqdm(self.val_loader.create_dict_iterator(), ncols=80, desc='Val', total=self.step_size)
         for i, d in enumerate(tbar):
             output, label = self.val_net(d["image"], d["label"])
             loss = self.net_with_criterion(d["image"], d["label"])
+            output = ops.Transpose()(output, (0, 3, 1, 2))
 
             pred = output.asnumpy()
             target = label.asnumpy()
+
             pred = np.argmax(pred, axis=1)
             self.evaluator.add_batch(target, pred)
 
-            test_loss += loss.item()
+            test_loss += float(loss.asnumpy())
             tbar.set_description('Train loss: %.3f' % (test_loss / (i + 1)))
 
         Acc = self.evaluator.Pixel_Accuracy()
@@ -159,14 +157,7 @@ class Trainer(object):
 
         if new_pred > self.best_pred:
             is_best = True
-            self.best_pred = new_pred
-            state_dict = self.net.parameters_dict()
-            self.saver.save_checkpoint({
-                'epoch': epoch + 1,
-                'state_dict': state_dict,
-                'optimizer': self.optimizer.state_dict(),
-                'best_pred': self.best_pred,
-            }, is_best, 'epoch{}_checkpoint.pth.tar'.format(str(epoch + 1)))
+            self.saver.save_checkpoint(self.net, is_best, 'epoch{}_checkpoint.ckpt'.format(str(1)))
 
         self.saver.save_train_info(test_loss, epoch, Acc, mIoU, FWIoU, IoU, is_best)
 
@@ -202,10 +193,9 @@ class TrainOneStepCell(nn.Module):
         """构建训练过程"""
         weights = self.weights
         loss = self.network(data, label)
-
         grads = self.grad(self.network, weights)(data, label)
-        for grad in grads:
-            print(grad)
+        # for grad in grads:
+        #     print(grad)
         return loss, self.optimizer(grads)
 
 class MyWithEvalCell(nn.Module):

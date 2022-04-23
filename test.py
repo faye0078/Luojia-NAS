@@ -1,72 +1,81 @@
-from luojianet_ms import context, set_seed
-import luojianet_ms.nn as nn
-import luojianet_ms as luojia
-from luojianet_ms import Model, ParameterTuple, ops
-from model.StageNet1 import SearchNet1
 import numpy as np
-from model.cell import ReLUConvBN
-# context.set_context(mode=context.GRAPH_MODE, device_target='GPU', device_id=3)
-#
-# rand = ops.UniformReal(seed=2)
-# tensor1 = rand((2, 12, 32, 32))
-# tensor2 = rand((2, 12, 32, 32))
-# loss = nn.SoftmaxCrossEntropyWithLogits(reduction='mean')
-# a = loss(tensor1, tensor2)
-# print(a)
-#
-# class Example(nn.Module):
-#     def __init__(self):
-#         super(Example, self).__init__()
-#         print('看看我们的模型有哪些parameter:\t', self.parameters_dict(), end='\n')
-#         self.W1_params = luojia.Parameter(ops.StandardNormal(seed=1)((2, 3)), 'w1')
-#         self.W2_params = luojia.Parameter(ops.StandardNormal(seed=2)((3, 4)), 'w2')
-#         print('增加W1后看看：', self.parameters_dict(), end='\n')
-#
-#
-#     def forward(self, x):
-#         return x
-#
-# # a = Example()
-# layers = np.ones([14, 4])
-# connections = np.load('/media/dell/DATA/wy/Seg_NAS/model/model_encode/GID-5/14layers_mixedcell1_3operation/first_connect_4.npy')
-# net = SearchNet1(layers, 4, connections, ReLUConvBN, 'GID', 5)
-# betas = net.arch_parameters()
-# print(betas)
+import luojianet_ms.nn as nn
+import luojianet_ms.ops as ops
+import luojianet_ms.dataset as ds
 from luojianet_ms import Parameter, Tensor
-from luojianet_ms.ops.composite import GradOperation
-from luojianet_ms import ops as P
-from luojianet_ms import dtype as mstype
+from luojianet_ms import ParameterTuple
 
-class Net(nn.Module):
+np.random.seed(4)
 
+class LinearNet(nn.Module):
     def __init__(self):
-        super(Net, self).__init__()
-        self.matmul = P.MatMul()
-        self.w = Parameter(Tensor(np.array([1.0, 1.0], np.float32)), name='z')
-        self.b = Parameter(Tensor(np.array([1.0, 1.0], np.float32)), name='b')
+        super().__init__()
+        self.w = Parameter(Tensor(np.array([1.0, 1.0], np.float32)), name='wang')
+        self.relu = nn.ReLU()
+        self.dense1_0 = nn.Dense(5, 32)
+        self.dense1_1 = nn.Dense(5, 32)
+        self.dense2 = nn.Dense(32, 1)
 
-    def call(self, x, y):
-        x = x * self.w[0]
-        x = x * self.b[0]
-        y = y * self.w[1]
-        y = y * self.b[1]
-        out = self.matmul(x, y)
-        return out
+    def call(self, x):
+        print(self.w)
+        x1 = self.w[0] * self.dense1_0(x)
+        x2 = self.w[1] * self.dense1_1(x)
+        x = x1 + x2
+        x = self.relu(x)
+        x = self.dense2(x)
+        return x
+class DatasetGenerator:
+    def __init__(self):
+        self.data = np.random.randn(5, 5).astype(np.float32)
+        self.label = np.random.randn(5, 1).astype(np.int32)
 
-class GradNetWrtX(nn.Module):
+    def __getitem__(self, index):
+        return self.data[index], self.label[index]
 
-    def __init__(self, net, optimizer):
-        super(GradNetWrtX, self).__init__()
+    def __len__(self):
+        return len(self.data)
+
+class TrainOneStepCell(nn.Module):
+    def __init__(self, network, optimizer, sens=1.0):
+        """参数初始化"""
+        super(TrainOneStepCell, self).__init__(auto_prefix=False)
+        self.network = network
+        # 使用tuple包装weight
+        self.weights = ParameterTuple(list(filter(lambda x: 'wang' in x.name, self.get_parameters())))
         self.optimizer = optimizer
-        self.net = net
-        self.params = ParameterTuple(list(filter(lambda x: 'b' in x.name, self.get_parameters())))
-        self.grad_op = GradOperation(get_by_list=True)
+        # 定义梯度函数
+        self.grad = ops.GradOperation(get_by_list=True, sens_param=True)
+        self.sens = sens
 
-    def call(self, x, y):
-        gradient_function = self.grad_op(self.net, self.params)
-        return gradient_function(x, y)
+    def call(self, data, label):
+        """构建训练过程"""
+        weights = self.weights
+        loss = self.network(data, label)
+        # 为反向传播设定系数
+        sens = ops.Fill()(ops.DType()(loss), ops.Shape()(loss), self.sens)
+        grads = self.grad(self.network, weights)(data, label, sens)
+        # for grad in grads:
+        #     print(grad)
+        return loss, self.optimizer(grads)
 
-x = Tensor([[0.5, 0.6, 0.4], [1.2, 1.3, 1.1]], dtype=mstype.float32)
-y = Tensor([[0.01, 0.3, 1.1], [0.1, 0.2, 1.3], [2.1, 1.2, 3.3]], dtype=mstype.float32)
-output = GradNetWrtX(Net())(x, y)
-print(output)
+# 对输入数据进行处理
+dataset_generator = DatasetGenerator()
+dataset = ds.GeneratorDataset(dataset_generator, ["data", "label"], shuffle=True)
+dataset = dataset.batch(32)
+# 实例化网络
+net = LinearNet()
+# 设定损失函数
+crit = nn.MSELoss()
+# 设定优化器
+opt = nn.Adam(params=list(filter(lambda x: 'wang' in x.name, net.get_parameters())))
+# 引入损失函数
+net_with_criterion = nn.WithLossCell(net, crit)
+# 自定义网络训练
+train_net = TrainOneStepCell(net_with_criterion, opt)
+
+# 获取训练过程数据
+for i in range(300):
+    for d in dataset.create_dict_iterator():
+        train_net(d["data"], d["label"])
+        print(net_with_criterion(d["data"], d["label"]))
+        print()

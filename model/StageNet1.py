@@ -113,7 +113,7 @@ class SearchNet1(nn.Module):
                 normalized_betas[i][j][:num] = ops.Softmax(axis=-1)(self.betas[i][j][:num]) * (num / self.max_num_connect)
                 # if the second search progress, the denominato should be 'num'
 
-        print(normalized_betas)
+        # print(self.betas[12][2][1])
 
         for i in range(14):
             features.append([])
@@ -151,7 +151,6 @@ class SearchNet1(nn.Module):
         betas = (1e-3 * ops.StandardNormal()((len(self.layers), self.depth, self.max_num_connect)))
 
         self.betas = luojia.Parameter(betas, name='betas')
-
 
     def arch_parameters(self):
         # return [param for name, param in self.parameters_and_names() if

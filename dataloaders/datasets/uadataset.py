@@ -24,7 +24,8 @@ class Uadataset(BaseDataset):
                  scale_factor=16,
                  mean=None,
                  std=None,
-                 is_train=True):
+                 is_train=True,
+                 number=None):
 
         super(Uadataset, self).__init__(ignore_label, num_classes, base_size,
                                          crop_size, downsample_rate, scale_factor, mean, std)
@@ -32,9 +33,12 @@ class Uadataset(BaseDataset):
         self._index = 0
         self.root = root
         if is_train:
-            self.list_path = root + "/uadataset/uad_512_train.lst"
+            if number == 1:
+                self.list_path = root + "/uadataset/mini_uad_512_train_1.lst"
+            elif number == 2:
+                self.list_path = root + "/uadataset/mini_uad_512_train_2.lst"
         else:
-            self.list_path = root + "/uadataset/uad_512_val.lst"
+            self.list_path = root + "/uadataset/mini_uad_512_val.lst"
         self.num_classes = num_classes
         self.multi_scale = multi_scale
         self.flip = flip
@@ -62,6 +66,7 @@ class Uadataset(BaseDataset):
             label_path = self.img_list[index][1]
             with rasterio.open(image_path) as image:
                 image = image.read().astype(np.float32).transpose(1, 2, 0)
+                image.close()
             with rasterio.open(label_path) as label:
                 label = label.read()
             if len(label.shape) == 3:

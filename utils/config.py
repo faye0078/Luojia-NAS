@@ -43,7 +43,7 @@ def obtain_search_args():
     parser = argparse.ArgumentParser(description="search args")
 
     # checking point
-    parser.add_argument('--resume', type=str, default=None, help='put the path to resuming file if needed')
+    parser.add_argument('--resume', type=str, default='/media/dell/DATA/wy/Luojia-NAS/run/uadataset/test/experiment_140/epoch1_checkpoint.ckpt', help='put the path to resuming file if needed')
     parser.add_argument('--checkname', type=str, default='test', help='set the checkpoint name')
     parser.add_argument('--save_checkpoint_path', type=str, default='/media/dell/DATA/wy/luojis_NAS/saved_model', help='put the path to resuming file if needed')
     parser.add_argument('--model_encode_path', type=str, default='/media/dell/DATA/wy/Seg_NAS/model/model_encode/GID-5/14layers_mixedcell1_3operation/first_connect_4.npy')
