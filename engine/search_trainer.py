@@ -82,7 +82,7 @@ class Trainer(object):
         self.arch_with_criterion = nn.WithLossCell(self.net, self.criterion)
 
         self.train_net = MyTrainStep(self.net_with_criterion, self.optimizer)
-        self.arch_net = TrainOneStepCell(self.arch_with_criterion, self.architect_optimizer)
+        self.arch_net = ArchTrainStep(self.arch_with_criterion, self.architect_optimizer)
 
         self.val_net = MyWithEvalCell(self.net)
 
@@ -171,10 +171,10 @@ class MyTrainStep(nn.TrainOneStepCell):
         grads = self.grad(self.network, weights)(data, label)
         return loss, self.optimizer(grads)
 
-class TrainOneStepCell(nn.Module):
+class ArchTrainStep(nn.Module):
     def __init__(self, network, optimizer):
         """参数初始化"""
-        super(TrainOneStepCell, self).__init__(auto_prefix=False)
+        super(ArchTrainStep, self).__init__(auto_prefix=False)
         self.network = network
         # 使用tuple包装weight
         self.optimizer = optimizer
