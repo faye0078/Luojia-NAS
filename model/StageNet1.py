@@ -130,13 +130,13 @@ class SearchNet1(nn.Module):
                         k += 1
 
         last_features = features[len(self.layers)-1]# TODO: how to replace?
+        true_last_features = []
 
-        last_feature0 = nn.ResizeBilinear()(last_features[0], size=last_features[0].shape[2:], align_corners=True)
-        last_feature1 = nn.ResizeBilinear()(last_features[1], size=last_features[0].shape[2:], align_corners=True)
-        last_feature2 = nn.ResizeBilinear()(last_features[2], size=last_features[0].shape[2:], align_corners=True)
-        last_feature3 = nn.ResizeBilinear()(last_features[3], size=last_features[0].shape[2:], align_corners=True)
+        for last_feature in last_features:
+            if not isinstance(last_feature, int):
+                true_last_features.append(nn.ResizeBilinear()(last_feature, size=last_features[0].shape[2:], align_corners=True))
 
-        result = ops.Concat(axis=1)((last_feature0, last_feature1, last_feature2, last_feature3))
+        result = ops.Concat(axis=1)(true_last_features)
         result = self.last_conv(result)
         result = nn.ResizeBilinear()(result, size=x.shape[2:], align_corners=True)
         result = ops.Transpose()(result, (0, 2, 3, 1))

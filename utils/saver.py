@@ -28,10 +28,8 @@ class Saver(object):
         p = OrderedDict()
         p['datset'] = self.args.dataset
         p['batchsize'] = self.args.batch_size
-        p['out_stride'] = self.args.out_stride
         p['lr'] = self.args.lr
         p['lr_scheduler'] = self.args.lr_scheduler
-        p['loss_type'] = self.args.loss_type
         p['epoch'] = self.args.epochs
         p['resize'] = self.args.resize
         p['crop_size'] = self.args.crop_size

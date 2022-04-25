@@ -10,7 +10,7 @@ from dataloaders.datasets.basedataset import BaseDataset
 
 
 class Uadataset(BaseDataset):
-    """Dataset Cityscapes generator."""
+    """Dataset FU generator."""
     def __init__(self,
                  root,
                  num_samples=None,
