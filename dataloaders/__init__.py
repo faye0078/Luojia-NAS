@@ -3,12 +3,12 @@ import os
 import luojianet_ms.dataset.engine as de
 from dataloaders.datasets.uadataset import Uadataset
 
-def make_search_data_loader(args, batch_size=4, run_distribute=False, is_train=True, raw=False):
+def make_search_data_loader(args, batch_size=4, choice=None, run_distribute=False, raw=False):
 
     if args.dataset == "uadataset":
         num_classes = 12
         crop_size = (512, 512)
-        if is_train:
+        if choice == "train":
             datasetA = Uadataset(args.data_path,
                                  num_samples=None,
                                  num_classes=12,
@@ -21,7 +21,7 @@ def make_search_data_loader(args, batch_size=4, run_distribute=False, is_train=T
                                  scale_factor=16,
                                  mean=[0.40781063, 0.44303973, 0.35496944],
                                  std=[0.3098623 , 0.2442191 , 0.22205387],
-                                 is_train=is_train,
+                                 choice=choice,
                                  number=1)
             datasetB = Uadataset(args.data_path,
                                  num_samples=None,
@@ -35,7 +35,7 @@ def make_search_data_loader(args, batch_size=4, run_distribute=False, is_train=T
                                  scale_factor=16,
                                  mean=[0.40781063, 0.44303973, 0.35496944],
                                  std=[0.3098623, 0.2442191, 0.22205387],
-                                 is_train=is_train,
+                                 choice=choice,
                                  number=2)
 
 
@@ -62,7 +62,7 @@ def make_search_data_loader(args, batch_size=4, run_distribute=False, is_train=T
 
             return datasetA, datasetB, crop_size, num_classes
 
-        elif not is_train:
+        elif choice == "val":
             dataset = Uadataset(args.data_path,
                                  num_samples=None,
                                  num_classes=12,
@@ -75,7 +75,7 @@ def make_search_data_loader(args, batch_size=4, run_distribute=False, is_train=T
                                  scale_factor=16,
                                  mean=[0.40781063, 0.44303973, 0.35496944],
                                  std=[0.3098623 , 0.2442191 , 0.22205387],
-                                 is_train=is_train,
+                                 choice=choice,
                                  number=1)
             if raw:
                 return dataset, crop_size, num_classes
@@ -95,12 +95,12 @@ def make_search_data_loader(args, batch_size=4, run_distribute=False, is_train=T
         raise ValueError("Unsupported dataset.")
 
 
-def make_retrain_data_loader(args, batch_size=4, run_distribute=False, is_train=True, raw=False):
+def make_retrain_data_loader(args, batch_size=4, choice=None, run_distribute=False, raw=False):
 
     if args.dataset == "uadataset":
         num_classes = 12
         crop_size = (512, 512)
-        if is_train:
+        if choice == "train":
             dataset = Uadataset(args.data_path,
                                  num_samples=None,
                                  num_classes=12,
@@ -113,8 +113,7 @@ def make_retrain_data_loader(args, batch_size=4, run_distribute=False, is_train=
                                  scale_factor=16,
                                  mean=[0.40781063, 0.44303973, 0.35496944],
                                  std=[0.3098623 , 0.2442191 , 0.22205387],
-                                 is_train=is_train,
-                                 number=1)
+                                 choice=choice)
 
             if raw:
                 return dataset, crop_size, num_classes
@@ -131,7 +130,7 @@ def make_retrain_data_loader(args, batch_size=4, run_distribute=False, is_train=
 
             return dataset, crop_size, num_classes
 
-        elif not is_train:
+        elif choice == 'val':
             dataset = Uadataset(args.data_path,
                                  num_samples=None,
                                  num_classes=12,
@@ -144,7 +143,7 @@ def make_retrain_data_loader(args, batch_size=4, run_distribute=False, is_train=
                                  scale_factor=16,
                                  mean=[0.40781063, 0.44303973, 0.35496944],
                                  std=[0.3098623 , 0.2442191 , 0.22205387],
-                                 is_train=is_train,
+                                 choice=choice,
                                  number=1)
             if raw:
                 return dataset, crop_size, num_classes
@@ -160,5 +159,36 @@ def make_retrain_data_loader(args, batch_size=4, run_distribute=False, is_train=
             dataset = dataset.batch(batch_size, drop_remainder=True)
 
             return dataset, crop_size, num_classes
+
+        elif choice == 'test':
+            dataset = Uadataset(args.data_path,
+                                num_samples=None,
+                                num_classes=12,
+                                multi_scale=False,
+                                flip=False,
+                                ignore_label=255,
+                                base_size=512,
+                                crop_size=crop_size,
+                                downsample_rate=1,
+                                scale_factor=16,
+                                mean=[0.40781063, 0.44303973, 0.35496944],
+                                std=[0.3098623, 0.2442191, 0.22205387],
+                                choice=choice,
+                                number=1)
+            if raw:
+                return dataset, crop_size, num_classes
+            if run_distribute:
+                dataset = de.GeneratorDataset(dataset, column_names=["image", "label"],
+                                              num_parallel_workers=4,
+                                              shuffle=True,
+                                              num_shards=1, shard_id=int(args.gpu_id))
+            else:
+                dataset = de.GeneratorDataset(dataset, column_names=["image", "label"],
+                                              num_parallel_workers=4,
+                                              shuffle=True)
+            dataset = dataset.batch(batch_size, drop_remainder=True)
+
+            return dataset, crop_size, num_classes
+
     else:
         raise ValueError("Unsupported dataset.")

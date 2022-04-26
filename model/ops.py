@@ -202,7 +202,7 @@ class Sobel(nn.Module):
     def __init__(self, C_in, C_out):
         super(Sobel, self).__init__()
         self.out_channels = C_out
-        self.conv1x1 = conv_bn_relu(C_in, C_out, 1, 1, 0) # TODO:是否能够这样做？
+        self.conv1x1 = conv_bn_relu(C_in, C_out, 1, 1, 0) # TODO:遥感算子
 
         self.filter = sobel
         # Gx = torch.tensor([[1.0, 0.0, -1.0], [2.0, 0.0, -2.0], [1.0, 0.0, -1.0]])
@@ -221,7 +221,7 @@ class Laplacian(nn.Module):
     def __init__(self, C_in, C_out):
         super(Laplacian, self).__init__()
         self.out_channels = C_out
-        self.conv1x1 = conv_bn_relu(C_in, C_out, 1, 1, 0) # TODO:是否能够这样做？
+        self.conv1x1 = conv_bn_relu(C_in, C_out, 1, 1, 0)
 
         self.filter = laplacian
 
@@ -235,7 +235,7 @@ class Gaussian(nn.Module):
     def __init__(self, C_in, C_out):
         super(Gaussian, self).__init__()
         self.out_channels = C_out
-        self.conv1x1 = conv_bn_relu(C_in, C_out, 1, 1, 0) # TODO:是否能够这样做？
+        self.conv1x1 = conv_bn_relu(C_in, C_out, 1, 1, 0)
 
         self.filter = gaussian_blur2d
 
@@ -248,7 +248,7 @@ class Median(nn.Module):
     def __init__(self, C_in, C_out):
         super(Median, self).__init__()
         self.out_channels = C_out
-        self.conv1x1 = conv_bn_relu(C_in, C_out, 1, 1, 0) # TODO:是否能够这样做？
+        self.conv1x1 = conv_bn_relu(C_in, C_out, 1, 1, 0)
 
         self.filter = median_blur
 

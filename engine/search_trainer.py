@@ -25,18 +25,18 @@ class Trainer(object):
         self.saver.save_experiment_config()
 
         # 定义dataloader
-        kwargs = {'run_distribute': False, 'is_train': True, 'raw': False}
-        self.train_loaderA, self.train_loaderB, self.image_size, self.num_classes = make_search_data_loader(args, args.batch_size, **kwargs)
+        kwargs = {'choice': 'train', 'run_distribute': False, 'raw': False}
+        self.train_setA, self.train_setB, self.image_size, self.num_classes = make_search_data_loader(args, args.batch_size, **kwargs)
 
         # 定义dataloader
-        kwargs = {'run_distribute': False, 'is_train': False, 'raw': False}
+        kwargs = {'choice': 'val', 'run_distribute': False, 'raw': False}
         self.val_loader, _, _ = make_search_data_loader(args, args.batch_size, **kwargs)
 
-        self.trainloader_A = self.train_loaderA.create_dict_iterator()
-        self.trainloader_B = self.train_loaderB.create_dict_iterator()
+        self.trainloader_A = self.train_setA.create_dict_iterator()
+
         self.valloader = self.val_loader.create_dict_iterator()
 
-        self.step_size = self.train_loaderA.get_dataset_size()
+        self.step_size = self.train_setA.get_dataset_size()
         self.val_step_size = self.val_loader.get_dataset_size()
         self.criterion = nn.SoftmaxCrossEntropyWithLogits(reduction='mean', sparse=True)
 
@@ -98,17 +98,18 @@ class Trainer(object):
     def training(self, epoch):
         print('Training Epoch: %d' % (epoch))
         train_loss = 0.0
-
+        self.trainloader_B = self.train_setB.create_dict_iterator()
         tbar = tqdm(self.trainloader_A, ncols=80, total=self.step_size)
-        trainloader_B = self.trainloader_B
+
         self.net.set_train(True)
         for i, d in enumerate(tbar):
             self.train_net(d["image"], d["label"])
             loss = self.net_with_criterion(d["image"], d["label"])
             train_loss += float(loss.asnumpy())
 
-            if epoch > self.args.alpha_epochs:
-                search = next(trainloader_B)
+            self.args.alpha_epochs = 0
+            if epoch >= self.args.alpha_epochs:
+                search = next(self.trainloader_B)
                 self.arch_net(search["image"], search["label"])
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 

@@ -24,7 +24,7 @@ class Uadataset(BaseDataset):
                  scale_factor=16,
                  mean=None,
                  std=None,
-                 is_train=True,
+                 choice=None,
                  number=None):
 
         super(Uadataset, self).__init__(ignore_label, num_classes, base_size,
@@ -32,13 +32,17 @@ class Uadataset(BaseDataset):
 
         self._index = 0
         self.root = root
-        if is_train:
-            if number == 1:
-                self.list_path = root + "/uadataset/mini_uad_512_train_1.lst"
-            elif number == 2:
-                self.list_path = root + "/uadataset/mini_uad_512_train_2.lst"
-        else:
-            self.list_path = root + "/uadataset/mini_uad_512_val.lst"
+        if choice == 'train':
+            # if number == 1:
+            #     self.list_path = root + "/uadataset/mini_uad_512_train_1.lst"
+            # elif number == 2:
+            #     self.list_path = root + "/uadataset/mini_uad_512_train_2.lst"
+            self.list_path = root + "/uadataset/uad_512_train.lst"
+        elif choice == 'val':
+            # self.list_path = root + "/uadataset/mini_uad_512_val.lst"
+            self.list_path = root + "/uadataset/uad_512_val.lst"
+        elif choice == 'test':
+            self.list_path = root + "/uadataset/uad_512_test.lst"
         self.num_classes = num_classes
         self.multi_scale = multi_scale
         self.flip = flip

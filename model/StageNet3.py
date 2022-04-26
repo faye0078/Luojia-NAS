@@ -126,7 +126,7 @@ class SearchNet3(nn.Module):
                             features[i][j] += self.mycells[i][j][index](features[connection[0][0]][connection[0][1]], normalized_alphas[i][j])
                         k += 1
 
-        last_features = features[len(self.layers)-1]# TODO: how to replace?
+        last_features = features[len(self.layers)-1]
 
         last_feature0 = nn.ResizeBilinear()(last_features[0], size=last_features[0].shape[2:], align_corners=True)
         last_feature1 = nn.ResizeBilinear()(last_features[1], size=last_features[0].shape[2:], align_corners=True)

@@ -1,7 +1,7 @@
 import random
 import numpy as np
-from utils.config import obtain_search_args
-from engine.search_trainer import Trainer
+from utils.config import obtain_retrain_args
+from engine.retrainer import Trainer
 from luojianet_ms import context, set_seed
 
 # 设置所使用的GPU GRAPH_MODE
@@ -13,7 +13,7 @@ def setup_seed(seed):
     set_seed(seed)
 
 def main():
-    args = obtain_search_args()
+    args = obtain_retrain_args()
     setup_seed(args.seed)
     trainer = Trainer(args)
 

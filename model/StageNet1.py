@@ -129,7 +129,7 @@ class SearchNet1(nn.Module):
                             features[i][j] += normalized_betas[i][j][k] * self.mycells[i][j][index](features[connection[0][0]][connection[0][1]])
                         k += 1
 
-        last_features = features[len(self.layers)-1]# TODO: how to replace?
+        last_features = features[len(self.layers)-1]
         true_last_features = []
 
         for last_feature in last_features:
