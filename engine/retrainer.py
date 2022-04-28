@@ -26,24 +26,23 @@ class Trainer(object):
         kwargs = {'choice': 'val', 'run_distribute': False, 'raw': False}
         self.val_loader, self.image_size, self.num_classes = make_retrain_data_loader(args, args.batch_size, **kwargs)
 
-        self.trainloader_A = self.train_loader.create_dict_iterator()
+        self.trainloader = self.train_loader.create_dict_iterator()
         self.valloader = self.val_loader.create_dict_iterator()
 
         self.step_size = self.train_loader.get_dataset_size()
         self.val_step_size = self.val_loader.get_dataset_size()
         self.criterion = nn.SoftmaxCrossEntropyWithLogits(reduction='mean', sparse=True)
 
-        self.arch_para = None
         if self.args.model_name == 'flexinet':
             layers = np.ones([14, 4])
             cell_arch = np.load(
-                '/media/dell/DATA/wy/Seg_NAS/run/uadataset/search/experiment_0/cell_arch/2_cell_arch_epoch_24.npy')
+                '/media/dell/DATA/wy/Seg_NAS/run/uadataset/search/experiment_0/cell_arch/2_cell_arch_epoch_nors24.npy')
             connections = np.load(
                 '/media/dell/DATA/wy/Seg_NAS/run/uadataset/search/experiment_0/connections/2_connections_epoch37.npy')
             net = RetrainNet(layers, 4, connections, cell_arch, self.args.dataset, self.num_classes)
         elif self.args.model_name == 'hrnet':
-            net = get_seg_model(self.args.dataset, self.num_classes)
-        self.arch_para = 'alphas'
+            net = get_seg_model(hrnetw48_config, self.num_classes)
+
         self.net = net
         self.lr = nn.dynamic_lr.cosine_decay_lr(args.min_lr, args.lr, args.epochs * self.step_size,
                                            self.step_size, 2)
@@ -72,7 +71,7 @@ class Trainer(object):
 
     def training(self, epoch):
         train_loss = 0.0
-        tbar = tqdm(self.trainloader_A, ncols=80, total=self.step_size)
+        tbar = tqdm(self.trainloader, ncols=80, total=self.step_size)
         self.net.set_train(True)
         for i, d in enumerate(tbar):
             self.train_net(d["image"], d["label"])

@@ -1,7 +1,7 @@
 """Different custom layers"""
 
 import luojianet_ms as luojia
-import luojianet_ms.nn as nn
+from luojianet_ms import nn
 
 
 OPS = {
@@ -43,12 +43,12 @@ OPS = {
     "global_average_pool": lambda C_in, C_out, stride, affine, repeats=1: GAPConv1x1(
         C_in, C_out
     ),
-    # "sobel_operator": lambda C_in, C_out, stride, affine, repeats=1: Sobel(
-    #     C_in, C_out
-    # ),
-    # "laplacian_operator": lambda C_in, C_out, stride, affine, repeats=1: Laplacian(
-    #     C_in, C_out
-    # )
+    "sobel_operator": lambda C_in, C_out, stride, affine, repeats=1: Sobel(
+        C_in, C_out
+    ),
+    "laplacian_operator": lambda C_in, C_out, stride, affine, repeats=1: Laplacian(
+        C_in, C_out
+    )
     # 'edge_operator':  lambda C_in, C_out, stride, affine, repeats=1: Edge(
     #     C_in, C_out
     # ),
@@ -117,11 +117,11 @@ class Pool(nn.Module):
                 ksize, stride=stride
             )
         elif mode == "max":
-            self.pool = nn.MaxPool2d(ksize, stride=stride)
+            self.pool = nn.MaxPool2d(ksize, stride=stride, pad_mode="same")
         else:
             raise ValueError("Unknown pooling method {}".format(mode))
 
-    def forward(self, x):
+    def call(self, x):
         x = self.conv1x1(x)
         return self.pool(x)
 
@@ -133,7 +133,7 @@ class GAPConv1x1(nn.Module):
         super(GAPConv1x1, self).__init__()
         self.conv1x1 = conv_bn_relu(C_in, C_out, 1, stride=1, padding=0)
 
-    def forward(self, x):
+    def call(self, x):
         size = x.size()[2:]
         out = x.mean(2, keepdim=True).mean(3, keepdim=True)
         out = self.conv1x1(out)
@@ -164,8 +164,9 @@ class SepConv(nn.Module):
                     kernel_size=kernel_size,
                     stride=stride,
                     padding=padding,
+                    pad_mode='pad',
                     dilation=dilation,
-                    groups=C_in,
+                    group=C_in,
                 ),
                 nn.Conv2d(C_in, C_out, kernel_size=1, padding=0),
                 nn.BatchNorm2d(C_out, affine=affine),
@@ -176,9 +177,9 @@ class SepConv(nn.Module):
         for idx in range(repeats):
             if idx > 0:
                 C_in = C_out
-            self.op.add_module("sep_{}".format(idx), basic_op(C_in, C_out))
+            self.op.append(basic_op(C_in, C_out))
 
-    def forward(self, x):
+    def call(self, x):
         return self.op(x)
 
 class Edge(nn.Module):
@@ -191,7 +192,7 @@ class Edge(nn.Module):
         G = G.unsqueeze(0).unsqueeze(0)
         self.filter.weight = luojia.Parameter(G)
 
-    def forward(self, img):
+    def call(self, img):
         b, c, w, h = img.shape
         x = img.mean(1, True)
         x = self.filter(x)
@@ -211,7 +212,7 @@ class Sobel(nn.Module):
         # G = G.unsqueeze(1)
         # self.filter.weight = nn.Parameter(G, requires_grad=False)
 
-    def forward(self, img):
+    def call(self, img):
         x = img.mean(1, True)
         x = self.filter(x, (3, 3))
         x.repeat(1, self.out_channels, 1, 1)
@@ -225,7 +226,7 @@ class Laplacian(nn.Module):
 
         self.filter = laplacian
 
-    def forward(self, img):
+    def call(self, img):
         x = img.mean(1, True)
         x = self.filter(x, 3, normalized=False)
         x.repeat(1, self.out_channels, 1, 1)
@@ -239,7 +240,7 @@ class Gaussian(nn.Module):
 
         self.filter = gaussian_blur2d
 
-    def forward(self, img):
+    def call(self, img):
         img = self.conv1x1(img)
         denoise_img = self.filter(img, (3, 3), (1.5, 1.5))
         return denoise_img
@@ -252,7 +253,7 @@ class Median(nn.Module):
 
         self.filter = median_blur
 
-    def forward(self, img):
+    def call(self, img):
         img = self.conv1x1(img)
         denoise_img = self.filter(img, (3, 3))
         return denoise_img
@@ -267,7 +268,7 @@ class Denoising(nn.Module):
         G = G.unsqueeze(0).unsqueeze(0)
         self.filter.weight = luojia.Parameter(G)
 
-    def forward(self, img):
+    def call(self, img):
         b, c, w, h = img.shape
         x = img.mean(1, True)
         x = self.filter(x)

@@ -1,5 +1,6 @@
 import luojianet_ms as luojia
 from luojianet_ms import nn
+from luojianet_ms import ops
 import math
 import numpy
 import luojianet_ms.common.initializer as weight_init
@@ -155,7 +156,14 @@ class MixedRetrainCell(nn.Module):
             feature_size_h = self.scale_dimension(x.shape[2], self.scale)
             feature_size_w = self.scale_dimension(x.shape[3], self.scale)
             x = nn.ResizeBilinear()(x, [feature_size_h, feature_size_w], align_corners=True)
-        return sum(self._ops[op](x) for op in self._ops)
+        # sum = (1e-3 * ops.StandardNormal()((4, int(x.shape[1] / self.scale), feature_size_h, feature_size_w)))
+        # for op in self._ops_index:
+        #     if op == 'conv1x1':
+        #         continue
+        #     op_rs = self._ops[self._ops_index[op]](x)
+        #     sum += op_rs
+        # return sum
+        return sum(self._ops[self._ops_index[op]](x) for op in self._ops_index)
 
     def _initialize_weights(self):
         for _, cell in self.cells_and_names():
