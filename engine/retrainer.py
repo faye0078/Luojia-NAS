@@ -9,7 +9,8 @@ from utils.config import hrnetw48_config
 from utils.evaluator import Evaluator
 from utils.saver import Saver
 from dataloaders import make_retrain_data_loader
-from model.RetrainNet import RetrainNet
+# from model.RetrainNet import RetrainNet
+from model.RetrainNet1 import RetrainNet
 from model.seg_hrnet import get_seg_model
 
 class Trainer(object):
@@ -79,8 +80,9 @@ class Trainer(object):
             train_loss += float(loss.asnumpy())
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 
-        if epoch > 55:
+        if epoch > 10:
             self.validation(epoch)
+        self.saver.save_checkpoint(self.net, False, 'current.ckpt')
 
     def validation(self, epoch):
         self.net.set_train(False)
@@ -113,7 +115,7 @@ class Trainer(object):
 
         if new_pred > self.best_pred:
             is_best = True
-            self.saver.save_checkpoint(self.net, is_best, 'epoch{}_checkpoint.ckpt'.format(str(1)))
+            self.saver.save_checkpoint(self.net, is_best, 'epoch{}_checkpoint.ckpt'.format(str(epoch)))
 
         self.saver.save_train_info(test_loss, epoch, Acc, mIoU, FWIoU, IoU, is_best)
 

@@ -1,7 +1,7 @@
 """Different custom layers"""
 
 import luojianet_ms as luojia
-from luojianet_ms import nn
+from luojianet_ms import nn, ops
 
 
 OPS = {
@@ -114,7 +114,7 @@ class Pool(nn.Module):
         self.conv1x1 = conv_bn(C_in, C_out, 1, 1, 0)
         if mode == "avg":
             self.pool = nn.AvgPool2d(
-                ksize, stride=stride
+                ksize, stride=stride, pad_mode="same"
             )
         elif mode == "max":
             self.pool = nn.MaxPool2d(ksize, stride=stride, pad_mode="same")
@@ -134,8 +134,10 @@ class GAPConv1x1(nn.Module):
         self.conv1x1 = conv_bn_relu(C_in, C_out, 1, stride=1, padding=0)
 
     def call(self, x):
-        size = x.size()[2:]
-        out = x.mean(2, keepdim=True).mean(3, keepdim=True)
+        size = x.shape[2:]
+        out = x.mean(2).mean(2)
+        out = ops.ExpandDims()(out, 2)
+        out = ops.ExpandDims()(out, 3)
         out = self.conv1x1(out)
         out = nn.ResizeBilinear()(out, size, align_corners=True)
         return out

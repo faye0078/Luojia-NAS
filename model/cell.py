@@ -158,8 +158,6 @@ class MixedRetrainCell(nn.Module):
             x = nn.ResizeBilinear()(x, [feature_size_h, feature_size_w], align_corners=True)
         # sum = (1e-3 * ops.StandardNormal()((4, int(x.shape[1] / self.scale), feature_size_h, feature_size_w)))
         # for op in self._ops_index:
-        #     if op == 'conv1x1':
-        #         continue
         #     op_rs = self._ops[self._ops_index[op]](x)
         #     sum += op_rs
         # return sum
