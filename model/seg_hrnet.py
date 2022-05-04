@@ -501,9 +501,8 @@ class HighResolutionNet(nn.Module):
         x = self.last_layer(x)
         h, w = ops.Shape()(input)[2:]
         x = self.resize_bilinear(x, size=(h, w))
-
-        transpose = ops.Transpose()
-        x = transpose(x, (0, 2, 3, 1))
+        # transpose = ops.Transpose()
+        # x = transpose(x, (0, 2, 3, 1))
         return x
 
 

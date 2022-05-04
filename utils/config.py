@@ -104,7 +104,6 @@ def obtain_retrain_args():
     # checking point
     parser.add_argument('--resume', type=str, default=None, help='put the path to resuming file if needed')
     parser.add_argument('--checkname', type=str, default='retrain', help='set the checkpoint name')
-    parser.add_argument('--model_encode_path', type=str, default='/media/dell/DATA/wy/Seg_NAS/model/model_encode/GID-5/14layers_mixedcell1_3operation/first_connect_4.npy')
     parser.add_argument('--model_name', type=str, default='flexinet')
 
     parser.add_argument('--batch-size', type=int, default=10, metavar='N', help='input batch size for training (default: auto)')

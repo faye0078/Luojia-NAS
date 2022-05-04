@@ -119,5 +119,5 @@ class RetrainNet(nn.Module):
         result = ops.Concat(axis=1)(true_last_features)
         result = self.last_conv(result)
         result = nn.ResizeBilinear()(result, size=x.shape[2:], align_corners=True)
-        result = ops.Transpose()(result, (0, 2, 3, 1))
+        # result = ops.Transpose()(result, (0, 2, 3, 1))
         return result
